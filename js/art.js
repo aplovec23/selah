@@ -298,6 +298,7 @@
     function measureTops() {
       const t = {};
       sheet.querySelectorAll("[data-anchor]").forEach((n) => {
+        if (!n.offsetParent && n !== sheet) return; // hidden section (e.g. guide turned off)
         let y = 0;
         for (let e = n; e && e !== sheet; e = e.offsetParent) y += e.offsetTop;
         t[n.dataset.anchor] = y;
@@ -309,6 +310,7 @@
       return changed;
     }
     const topOf = (a) => (a && tops[a] !== undefined ? tops[a] : 0);
+    const shown = (a) => !a || tops[a] !== undefined; // pinned to a section that is on screen
     function anchorAt(y) {
       let best = null, bestTop = -Infinity;
       for (const [a, t] of Object.entries(tops)) if (t <= y && t > bestTop) (best = a), (bestTop = t);
@@ -345,6 +347,7 @@
       for (const s of entry.strokes) drawPinned(s.tool === "highlighter" ? ctxU : ctxI, s);
     }
     function drawPinned(ctx, s) {
+      if (!shown(s.a)) return;
       const dy = topOf(s.a);
       if (dy) {
         ctx.save();
@@ -509,7 +512,7 @@
     function eraseAt(x, y) {
       const rad = sizeOf("eraser") / 2;
       const before = entry.strokes.length;
-      entry.strokes = entry.strokes.filter((s) => !hitsStroke(s, x, y - topOf(s.a), rad));
+      entry.strokes = entry.strokes.filter((s) => !shown(s.a) || !hitsStroke(s, x, y - topOf(s.a), rad));
       if (entry.strokes.length !== before) redraw();
       clearLive();
       ctxL.save();
@@ -531,6 +534,7 @@
     function itemNode(it) {
       const n = el("div.item", { class: it.kind + (it.frame ? " frame-" + it.frame : "") + (selected === it.id ? " sel" : ""), dataset: { id: it.id } });
       Object.assign(n.style, { left: it.x + "px", top: topOf(it.a) + it.y + "px", width: it.w + "px", height: it.h + "px", transform: `rotate(${it.rot || 0}deg)` });
+      if (!shown(it.a)) n.style.display = "none";
       if (it.kind === "sticker" && String(it.ref).startsWith("u:")) {
         const img = el("img", { alt: "sticker", draggable: "false" });
         myStickerURL(it.ref.slice(2)).then((u) => (u ? (img.src = u) : (n.style.display = "none"))); // removed sticker: hide

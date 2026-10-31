@@ -6,7 +6,7 @@
   const trName = (id) => S.bible.trInfo(id).name;
 
   // ---------- data ----------
-  const DEFAULTS = { tr: "web", bg: "cream", theme: "auto", font: "serif", startWeek: 0, pen: "#2e2a25" };
+  const DEFAULTS = { guide: true, tr: "web", bg: "cream", theme: "auto", font: "serif", startWeek: 0, pen: "#2e2a25" };
   let settings = { ...DEFAULTS };
   let index = {}; // date -> { ref, done, vod: { niv: {r,t}, ... } }
 
@@ -86,7 +86,7 @@
     const old = await getDay(date);
     const entry = old || {
       date, sections: { e: "", l: "", a: "", h: "" }, strokes: [], items: [], hl: {},
-      bg: settings.bg, width: window.innerWidth < 600 ? 440 : 720, tr: settings.tr,
+      bg: settings.bg, width: window.innerWidth < 600 ? 440 : 720, tr: settings.tr, guide: settings.guide !== false,
     };
     let verses;
     if (pasted) {
@@ -109,6 +109,20 @@
       if (!keepKey) entry.key = null;
     }
     await saveDay(entry);
+    return entry;
+  }
+
+  /** A day for free writing only: no passage, guide off. */
+  async function journalDay(date) {
+    let entry = await getDay(date);
+    if (!entry) {
+      entry = {
+        date, ranges: [], verses: {}, ref: "", tr: null, guide: false,
+        sections: { e: "", l: "", a: "", h: "", j: "" }, strokes: [], items: [], hl: {},
+        bg: settings.bg, width: window.innerWidth < 600 ? 440 : 720,
+      };
+      await saveDay(entry);
+    }
     return entry;
   }
 
@@ -280,7 +294,10 @@
         prev,
         pasteArea,
         el("div", { style: { marginTop: "6px" } }, modeBtn),
-        el("div.actions", {}, el("button.btn", { onclick: () => { close(); bulkDialog(); } }, "Plan many days…"), el("span.spacer"), el("button.btn", { onclick: close }, "Cancel"), save)
+        el("div.actions", {},
+          el("button.btn", { onclick: () => { close(); bulkDialog(); } }, "Plan many days…"),
+          existing ? null : el("button.btn", { title: "A page for free writing, with no passage", onclick: async () => { const d = dateIn.value || ui.today(); await journalDay(d); close(); go("#/day/" + d); } }, "✎ Just journal"),
+          el("span.spacer"), el("button.btn", { onclick: close }, "Cancel"), save)
       );
       setMode(pasteMode);
       if (existing && !pasteMode) update();
@@ -359,6 +376,8 @@
       const esvIn = el("input.input", { value: settings.esvKey || "", placeholder: "Paste your ESV API key", autocomplete: "off", spellcheck: "false" });
       const nltIn = el("input.input", { value: settings.nltKey || "", placeholder: "Paste your NLT API key", autocomplete: "off", spellcheck: "false" });
       const bgSel = el("select.input", {}, S.backgrounds.LIST.map((b) => el("option", { value: b.id, selected: b.id === settings.bg }, `${b.group}: ${b.name}`)));
+      const guideSel = el("select.input", {}, [["guide", "S.E.L.A.H. guide (Scripture, Examine, Lesson, Acknowledge, Heart)"], ["free", "Free journal (one open writing area)"]].map(([v, n]) =>
+        el("option", { value: v, selected: (settings.guide === false ? "free" : "guide") === v }, n)));
       const theme = el("select.input", {}, [["auto", "Match device"], ["light", "Light"], ["dark", "Dark"]].map(([v, n]) => el("option", { value: v, selected: v === settings.theme }, n)));
       const week = el("select.input", {}, [[0, "Sunday"], [1, "Monday"]].map(([v, n]) => el("option", { value: v, selected: v === settings.startWeek }, n)));
       const extra = [];
@@ -376,6 +395,7 @@
         el("h2", {}, "Settings"),
         el("p.sub", {}, "Saved on this device."),
         el("label.field", {}, el("span", {}, "Main translation (pages and widget)"), trSel),
+        el("label.field", {}, el("span", {}, "Page style for new pages"), guideSel),
         el("label.field", {}, el("span", {}, "Background for new pages"), bgSel),
         el("div.row", {}, el("label.field", {}, el("span", {}, "Appearance"), theme), el("label.field", {}, el("span", {}, "Week starts on"), week)),
         ...extra,
@@ -390,7 +410,7 @@
         el("p.copyright", { style: { marginTop: "18px" } }, "WEB and KJV text from bible-api.com (public domain). ESV® © Crossway and NLT © Tyndale House Foundation, used through their official services with the publishers' notices."),
         el("div.actions", {}, el("button.btn.primary", {
           onclick: async () => {
-            await saveSettings({ tr: trSel.value, bg: bgSel.value, theme: theme.value, startWeek: +week.value, esvKey: esvIn.value.trim(), nltKey: nltIn.value.trim() });
+            await saveSettings({ guide: guideSel.value === "guide", tr: trSel.value, bg: bgSel.value, theme: theme.value, startWeek: +week.value, esvKey: esvIn.value.trim(), nltKey: nltIn.value.trim() });
             close();
             route();
           },
@@ -494,7 +514,7 @@
   S.app = {
     get settings() { return settings; },
     get index() { return index; },
-    saveSettings, getDay, saveDay, removeDay, planDay, planDialog, bulkDialog, go, route, verseOfDay, pushWidget,
+    saveSettings, getDay, saveDay, removeDay, planDay, journalDay, planDialog, bulkDialog, go, route, verseOfDay, pushWidget,
   };
 
   window.addEventListener("DOMContentLoaded", () =>

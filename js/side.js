@@ -57,7 +57,7 @@
         const d = ui.addDays(start, i);
         grid.append(el("button", {
           class: [d.slice(0, 7) !== viewYM && "out", index[d] && "has", d === t && "today", d === ctx.date && "cur"].filter(Boolean).join(" "),
-          title: index[d] ? `${ui.shortDate(d)} — ${index[d].ref}` : ui.shortDate(d),
+          title: index[d] ? `${ui.shortDate(d)} — ${index[d].ref || "Journal"}` : ui.shortDate(d),
           onclick: () => (index[d] ? ctx.go("#/day/" + d) : app.planDialog(d)),
         }, +d.slice(8)));
       }
@@ -96,7 +96,7 @@
         el("section.side-card", {},
           el("div.side-title", {}, "Coming up"),
           upcoming.length
-            ? el("ul.up-list", {}, upcoming.map((d) => el("li", {}, el("button", { onclick: () => ctx.go("#/day/" + d) }, el("span.d", {}, ui.fmt(d, { weekday: "short", day: "numeric" })), el("span.r", {}, index[d].ref)))))
+            ? el("ul.up-list", {}, upcoming.map((d) => el("li", {}, el("button", { onclick: () => ctx.go("#/day/" + d) }, el("span.d", {}, ui.fmt(d, { weekday: "short", day: "numeric" })), el("span.r", {}, index[d].ref || "✎ Journal")))))
             : el("p.muted.small", {}, "Nothing planned after this day."),
           el("button.btn", { style: { marginTop: "8px" }, onclick: () => app.planDialog(ui.addDays(ctx.date, 1)) }, "＋ Plan the next day"))
       );

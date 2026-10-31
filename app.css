@@ -401,3 +401,14 @@ main#view { flex: 1; min-height: 0; overflow: auto; position: relative; }
 .day-bottom { display: flex; justify-content: center; margin: 28px auto 0; }
 .day-bottom .download { padding: 10px 18px; color: var(--ink-2); }
 .day-bottom .download:hover { color: var(--accent); border-color: var(--accent); }
+
+/* Free journal style: no S.E.L.A.H. guide, one open writing area */
+.sec.journal { display: none; }
+.sheet.free .sec.journal { display: block; }
+.sheet.free .sec.guided { display: none; }
+.sheet.free .sec-s .letter, .sheet.free .sec-s .hint { display: none; }
+.sheet.free .sec-s .sec-h { height: 32px; }
+.sec-s.empty { display: none; }
+.sec-h.plain { height: 32px; }
+.journal-write { min-height: 640px; }
+.cal-day .ref.journal { color: var(--gold); background: var(--gold-soft); font-style: italic; }

@@ -52,6 +52,7 @@
     entry.hl = entry.hl || {};
     if (!entry.verses[entry.tr]) entry.tr = entry.verses[app.settings.tr] ? app.settings.tr : savedTr(entry)[0];
     const TR = savedTr(entry).map((id) => ({ id, name: S.bible.trInfo(id).name }));
+    entry.sections.j = entry.sections.j || "";
 
     const save = ui.debounce(() => app.saveDay(entry), 500);
     // save right away if the app is hidden or closed mid-typing
@@ -70,13 +71,15 @@
     const at = planned.indexOf(date);
     const prev = planned[at - 1], next = planned[at + 1];
 
-    const trSeg = el("div.seg", { title: "Translation" }, TR.map((t) =>
+    const trSeg = el("div.seg", { title: "Translation", hidden: TR.length < 2 }, TR.map((t) =>
       el("button", { class: t.id === entry.tr ? "on" : "", onclick: () => setTr(t.id) }, t.name)));
     const menuBtn = el("button.icon-btn", { title: "More", "aria-label": "More", html: '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></svg>' });
     menuBtn.onclick = () => ui.popover(menuBtn, (p, close) => {
       p.append(el("div", { style: { display: "grid", gap: "4px", minWidth: "200px" } },
         el("button.btn.ghost", { onclick: () => { close(); app.planDialog(date, entry); } }, "Change passage"),
         el("button.btn.ghost", { onclick: () => { close(); app.planDialog(date, entry, { paste: true }); } }, "Paste my own text"),
+        el("button.btn.ghost", { onclick: () => { close(); entry.guide = entry.guide === false; applyGuide(); art.resize(); app.saveDay(entry); ui.toast(entry.guide === false ? "Free journal — the S.E.L.A.H. guide is off for this page" : "S.E.L.A.H. guide is on for this page"); } },
+          entry.guide === false ? "Use the S.E.L.A.H. guide" : "Free journal (turn off guide)"),
         el("button.btn.ghost", { onclick: () => { close(); savePhoto(); } }, "Save page as photo"),
         el("button.btn.ghost", { onclick: () => { close(); clearKey(); } }, "Clear verse of the day"),
         el("button.btn.ghost.danger", { onclick: async () => { close(); if (await ui.confirmBox("Delete this day?", `${ui.longDate(date)} — the passage, reflection, drawings and photos will be removed.`, "Delete", true)) { await app.removeDay(date); app.go("#/cal/" + date.slice(0, 7)); } } }, "Delete day")));
@@ -101,9 +104,20 @@
 
     // ---------- page content ----------
     const scripture = el("div.scripture");
+    const hasPassage = Object.keys(entry.verses || {}).length > 0;
+    // Free journal style: one open writing area instead of E/L/A/H (both are kept; only one shows)
+    function journalSection() {
+      const w = el("div.write.journal-write", { contenteditable: "true", "data-ph": hasPassage ? "Write freely — thoughts, prayers, notes, anything on your heart…" : "Write freely…", "data-k": "j", spellcheck: "true", html: clean(entry.sections.j) });
+      w.addEventListener("input", () => { entry.sections.j = w.innerHTML; save(); art.resize(); });
+      w.addEventListener("paste", (e) => { e.preventDefault(); document.execCommand("insertText", false, (e.clipboardData || window.clipboardData).getData("text/plain")); });
+      return el("section.sec.journal", { "data-anchor": "j" }, el("div.sec-h.plain", {}, el("h3", {}, "Journal")), w);
+    }
+    function applyGuide() {
+      sheet.classList.toggle("free", entry.guide === false);
+    }
     const content = el("div.sheet-content", {},
       el("header.day-date", { "data-anchor": "top" }, el("span.dow", {}, ui.weekday(date)), el("span.full", {}, ui.longDate(date))),
-      el("section.sec", { "data-anchor": "s" },
+      el("section.sec.sec-s", { "data-anchor": "s", class: hasPassage ? "" : "empty" },
         el("div.sec-h", {}, el("span.letter", {}, "S"), el("div", {}, el("h3", {}, "Scripture ", el("span.ref-line", {}, "· " + entry.ref)), el("div.hint", {}, SCRIPTURE_HINT))),
         scripture,
         el("div.copyright", { "data-tr": "" })),
@@ -126,11 +140,12 @@
             save();
           }
         });
-        return el("section.sec", { "data-anchor": s.k },
+        return el("section.sec.guided", { "data-anchor": s.k },
           el("div.sec-h", {}, el("span.letter", {}, s.letter), el("div", {}, el("h3", {}, s.title), el("div.hint", {}, s.hint))),
           w);
-      }));
+      }).concat(journalSection()));
     sheet.append(content);
+    applyGuide();
 
     function applyBg() {
       const b = S.backgrounds.byId[entry.bg] || S.backgrounds.byId.cream;
@@ -172,7 +187,7 @@
         span.append(v.t.slice(pos) + " ");
         scripture.append(span);
       }
-      content.querySelector(".copyright").textContent = S.bible.trInfo(entry.tr).notice;
+      content.querySelector(".copyright").textContent = entry.tr ? S.bible.trInfo(entry.tr).notice : "";
     }
     function setTr(id) {
       entry.tr = id;
