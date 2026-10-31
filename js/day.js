@@ -41,11 +41,20 @@
     const app = S.app;
     let entry = await app.getDay(date);
     if (!entry) {
+      // nothing planned for this day yet: offer the three ways to start
+      const isToday = date === ui.today();
+      const choice = (icon, title, text, onclick, primary) =>
+        el("button.start-choice", { class: primary ? "primary" : "", onclick }, el("span.ic", {}, icon), el("span", {}, el("b", {}, title), el("small", {}, text)));
       host.append(el("div.cal-wrap", { style: { display: "block", maxWidth: "560px" } },
-        el("div.card", { style: { padding: "24px" } },
-          el("h2", { style: { fontFamily: "var(--serif)", margin: "0 0 6px" } }, ui.longDate(date)),
-          el("p.muted", {}, "No passage planned for this day."),
-          el("div.row", {}, el("button.btn.primary", { onclick: () => app.planDialog(date) }, "Plan this day"), el("button.btn", { onclick: () => app.go("#/cal/" + date.slice(0, 7)) }, "Back to calendar")))));
+        el("div.card.start-card", {},
+          el("p.muted", { style: { margin: "0 0 2px", fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase", fontSize: "12px" } }, ui.weekday(date)),
+          el("h2", {}, ui.longDate(date)),
+          el("p.muted", {}, isToday ? "Nothing planned for today yet. How would you like to start?" : "Nothing planned for this day yet."),
+          el("div.start-choices", {},
+            choice("📖", "Choose a passage", "Type a reference and download it (needs internet).", () => app.planDialog(date), true),
+            choice("📋", "Paste a passage", "Paste from your Bible app or a website — works offline.", () => app.planDialog(date, null, { paste: true })),
+            choice("✎", "Just journal", "A blank page to write freely, no passage.", async () => { await app.journalDay(date); app.go("#/day/" + date); })),
+          el("div", { style: { marginTop: "14px" } }, el("button.btn.ghost", { onclick: () => app.go("#/cal/" + date.slice(0, 7)) }, "‹ Back to calendar")))));
       return {};
     }
     entry.sections = entry.sections || { e: "", l: "", a: "", h: "" };

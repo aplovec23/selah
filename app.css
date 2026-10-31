@@ -422,3 +422,13 @@ main#view { flex: 1; min-height: 0; overflow: auto; position: relative; }
 .switch input:checked + .track .knob { transform: translateX(14px); }
 .switch input:focus-visible + .track { box-shadow: 0 0 0 3px var(--accent-soft); }
 .day-top .switch { padding: 0 4px; }
+
+.start-card { padding: 24px; }
+.start-card h2 { font-family: var(--serif); font-size: 30px; margin: 0 0 6px; font-weight: 600; }
+.start-choices { display: grid; gap: 10px; margin-top: 14px; }
+.start-choice { display: flex; gap: 14px; align-items: center; text-align: left; border: 1px solid var(--line); background: var(--surface-2); border-radius: 14px; padding: 14px 16px; }
+.start-choice:hover { border-color: var(--accent); }
+.start-choice.primary { background: var(--accent-soft); border-color: var(--accent); }
+.start-choice .ic { font-size: 24px; width: 36px; text-align: center; flex: none; }
+.start-choice b { display: block; font-size: 16px; }
+.start-choice small { color: var(--ink-2); font-size: 13px; }

@@ -192,7 +192,8 @@
   let current = null;
   async function route() {
     const h = location.hash.replace(/^#\/?/, "");
-    const [view, arg] = h.split("/");
+    const [view, rawArg] = h.split("/");
+    const arg = rawArg && rawArg.split("?")[0];
     if (current && current.leave) await current.leave();
     S.ui.closePop();
     const host = document.getElementById("view");
@@ -489,7 +490,7 @@
     await Promise.all([loadSettings(), loadIndex(), S.bible.init()]);
     if (!(stored && stored.tr && S.bible.TRANSLATIONS.some((t) => t.id === stored.tr)) && S.sources.localIds.includes("niv")) settings.tr = "niv";
     document.getElementById("go-calendar").onclick = () => go("#/cal");
-    document.getElementById("go-today").onclick = () => go(index[ui.today()] ? "#/day/" + ui.today() : "#/cal");
+    document.getElementById("go-today").onclick = () => go("#/day/" + ui.today()); // shows the start choices if nothing is planned
     document.getElementById("go-plan").onclick = () => planDialog(location.hash.startsWith("#/day/") ? location.hash.slice(6) : ui.today());
     document.getElementById("go-settings").onclick = settingsDialog;
     window.addEventListener("hashchange", route);
