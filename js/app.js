@@ -79,7 +79,7 @@
 
   /** Put a passage on a date (keeps the reflection if the day already exists). */
   /** Put a passage on a date: downloads it in every available translation and saves it with the day. */
-  async function planDay(date, input, { keepKey, onStep, pasted } = {}) {
+  async function planDay(date, input, { keepKey, onStep, pasted, guide } = {}) {
     const { ranges, errors } = S.bible.parse(input);
     if (errors.length || !ranges.length) throw new Error(errors[0] || "Type a passage, e.g. John 3:16–21");
     if (S.bible.verseCount(ranges) > S.bible.MAX_VERSES) throw new Error(`That's more than ${S.bible.MAX_VERSES} verses — try a shorter passage`);
@@ -103,6 +103,7 @@
     entry.ranges = ranges;
     entry.ref = S.bible.label(ranges);
     entry.verses = verses;
+    if (guide !== undefined) entry.guide = !!guide;
     if (!entry.verses[entry.tr]) entry.tr = entry.verses[settings.tr] ? settings.tr : Object.keys(entry.verses)[0];
     if (changed) {
       entry.hl = {};
@@ -216,6 +217,7 @@
         el("label.field", {}, el("span", {}, "Passage text"), pasteBox));
       const modeBtn = el("button.btn.ghost", { type: "button", onclick: () => setMode(!pasteMode) });
       const sub = el("p.sub");
+      const guideSw = ui.toggle("S.E.L.A.H. guide", existing ? existing.guide !== false : settings.guide !== false, null, "Off: keep the passage but write your reflection freely in one open area");
       function setMode(v) {
         pasteMode = v;
         pasteArea.hidden = !v;
@@ -272,10 +274,10 @@
           }
           if (pasteMode) {
             if (!pasteBox.value.trim()) throw new Error("Paste the passage text first");
-            await planDay(d, refIn.value, { pasted: { name: pasteName.value, text: pasteBox.value } });
+            await planDay(d, refIn.value, { pasted: { name: pasteName.value, text: pasteBox.value }, guide: guideSw.get() });
           } else {
             prev.replaceChildren(el("span.muted", {}, "Downloading the passage for offline reading…"));
-            await planDay(d, refIn.value, { onStep: (k, total) => prev.replaceChildren(el("span.muted", {}, `Downloading… ${k} of ${total} translations`)) });
+            await planDay(d, refIn.value, { guide: guideSw.get(), onStep: (k, total) => prev.replaceChildren(el("span.muted", {}, `Downloading… ${k} of ${total} translations`)) });
           }
           close();
           ui.toast(`Saved for ${ui.shortDate(d)}`);
@@ -293,7 +295,7 @@
         el("label.field", {}, el("span", {}, "Passage"), refIn),
         prev,
         pasteArea,
-        el("div", { style: { marginTop: "6px" } }, modeBtn),
+        el("div.row", { style: { marginTop: "8px", alignItems: "center", justifyContent: "space-between" } }, modeBtn, guideSw),
         el("div.actions", {},
           el("button.btn", { onclick: () => { close(); bulkDialog(); } }, "Plan many days…"),
           existing ? null : el("button.btn", { title: "A page for free writing, with no passage", onclick: async () => { const d = dateIn.value || ui.today(); await journalDay(d); close(); go("#/day/" + d); } }, "✎ Just journal"),

@@ -71,6 +71,7 @@
     const at = planned.indexOf(date);
     const prev = planned[at - 1], next = planned[at + 1];
 
+    const guideSwitch = ui.toggle("S.E.L.A.H.", entry.guide !== false, (on) => setGuide(on), "S.E.L.A.H. guide on/off — off gives one open writing area");
     const trSeg = el("div.seg", { title: "Translation", hidden: TR.length < 2 }, TR.map((t) =>
       el("button", { class: t.id === entry.tr ? "on" : "", onclick: () => setTr(t.id) }, t.name)));
     const menuBtn = el("button.icon-btn", { title: "More", "aria-label": "More", html: '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></svg>' });
@@ -78,7 +79,7 @@
       p.append(el("div", { style: { display: "grid", gap: "4px", minWidth: "200px" } },
         el("button.btn.ghost", { onclick: () => { close(); app.planDialog(date, entry); } }, "Change passage"),
         el("button.btn.ghost", { onclick: () => { close(); app.planDialog(date, entry, { paste: true }); } }, "Paste my own text"),
-        el("button.btn.ghost", { onclick: () => { close(); entry.guide = entry.guide === false; applyGuide(); art.resize(); app.saveDay(entry); ui.toast(entry.guide === false ? "Free journal — the S.E.L.A.H. guide is off for this page" : "S.E.L.A.H. guide is on for this page"); } },
+        el("button.btn.ghost", { onclick: () => { close(); setGuide(entry.guide === false); } },
           entry.guide === false ? "Use the S.E.L.A.H. guide" : "Free journal (turn off guide)"),
         el("button.btn.ghost", { onclick: () => { close(); savePhoto(); } }, "Save page as photo"),
         el("button.btn.ghost", { onclick: () => { close(); clearKey(); } }, "Clear verse of the day"),
@@ -90,6 +91,7 @@
       el("button.icon-btn", { title: prev ? "Previous reading" : "", disabled: !prev, style: { opacity: prev ? 1 : 0.3 }, onclick: () => prev && app.go("#/day/" + prev), html: '<svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' }),
       el("button.icon-btn", { title: next ? "Next reading" : "", disabled: !next, style: { opacity: next ? 1 : 0.3 }, onclick: () => next && app.go("#/day/" + next), html: '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' }),
       el("span.spacer"),
+      guideSwitch,
       trSeg,
       menuBtn,
       el("button.icon-btn.side-toggle", { title: "Companion panel: today, prayer list, memory verse", "aria-label": "Companion panel", onclick: () => side && side.toggle(), html: '<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14.5 4.5v15" stroke="currentColor" stroke-width="1.8"/></svg>' }));
@@ -114,6 +116,13 @@
     }
     function applyGuide() {
       sheet.classList.toggle("free", entry.guide === false);
+    }
+    function setGuide(on) {
+      entry.guide = !!on;
+      applyGuide();
+      guideSwitch.set(on);
+      art.resize();
+      app.saveDay(entry);
     }
     const content = el("div.sheet-content", {},
       el("header.day-date", { "data-anchor": "top" }, el("span.dow", {}, ui.weekday(date)), el("span.full", {}, ui.longDate(date))),

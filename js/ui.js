@@ -140,5 +140,16 @@
     return d;
   };
 
-  S.ui = { el, iso, parseIso, today, addDays, longDate, weekday, shortDate, fmt, toast, dialog, confirmBox, popover, closePop, uid, debounce };
+  /** Small on/off switch with a label. onChange(checked) */
+  function toggle(label, checked, onChange, title) {
+    const input = el("input", { type: "checkbox", role: "switch" });
+    input.checked = !!checked;
+    input.addEventListener("change", () => onChange && onChange(input.checked));
+    const node = el("label.switch", { title: title || label }, input, el("span.track", {}, el("span.knob")), el("span.lbl", {}, label));
+    node.set = (v) => (input.checked = !!v);
+    node.get = () => input.checked;
+    return node;
+  }
+
+  S.ui = { toggle, el, iso, parseIso, today, addDays, longDate, weekday, shortDate, fmt, toast, dialog, confirmBox, popover, closePop, uid, debounce };
 })();
