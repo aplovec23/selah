@@ -432,3 +432,4 @@ main#view { flex: 1; min-height: 0; overflow: auto; position: relative; }
 .start-choice .ic { font-size: 24px; width: 36px; text-align: center; flex: none; }
 .start-choice b { display: block; font-size: 16px; }
 .start-choice small { color: var(--ink-2); font-size: 13px; }
+.sheet.capturing { border-radius: 0; box-shadow: none; }

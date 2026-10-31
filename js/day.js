@@ -502,14 +502,13 @@
         const maxArea = appleLike ? 16.0e6 : 60e6, maxSide = appleLike ? 16000 : 30000;
         const scale = Math.max(0.25, Math.min(2.5, 2200 / entry.width, Math.sqrt(maxArea / (w * h)), maxSide / h));
         const canvas = await html2canvas(sheet, {
-          scale, backgroundColor: null, logging: false,
+          scale, backgroundColor: "#ffffff", logging: false,
           width: w, height: h, windowWidth: Math.max(window.innerWidth, entry.width + 40),
         });
         if (!canvas.width || !canvas.height) throw new Error("this page is too long for one picture");
-        // very large pictures as JPEG to keep the file a sensible size
-        const big = canvas.width * canvas.height > 12e6;
-        const dataUrl = big ? canvas.toDataURL("image/jpeg", 0.9) : canvas.toDataURL("image/png");
-        const name = `Selah ${date} ${(entry.ref || "Journal").replace(/[:;,]/g, ".").replace(/[\\/]/g, "-")}${big ? ".jpg" : ".png"}`;
+        // saved as JPEG: small files that open everywhere
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+        const name = `Selah ${date} ${(entry.ref || "Journal").replace(/[:;,]/g, ".").replace(/[\\/]/g, "-")}.jpg`;
         const ok = await S.store.raw("savePhoto", { name, dataUrl });
         if (ok !== false && S.platform !== "android") ui.toast(S.platform === "apple" ? "Choose where to save the photo" : "Photo saved"); // Android shows its own notice
       } catch (e) {
