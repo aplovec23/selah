@@ -202,7 +202,43 @@
       return n + k;
     }, 0);
 
+  /** Translation to download a looked-up verse in: the page's, then the main one, then any. */
+  function lookupTr(prefer) {
+    const ids = S.sources.available((S.app && S.app.settings) || {}).map((t) => t.id);
+    for (const id of [prefer, S.app && S.app.settings.tr]) if (id && ids.includes(id)) return id;
+    return ids[0];
+  }
+
+  /**
+   * Look up a short passage typed by the person, e.g. "John 3:16" or "Rom 8:28-30".
+   * Uses the day's own saved text when it covers the verses (works offline), else downloads it.
+   * Returns { ref, text, tr, verses }.
+   */
+  async function lookup(input, { entry, tr, max = 30 } = {}) {
+    const { ranges, errors } = parse(input);
+    if (errors.length || !ranges.length) throw new Error(errors[0] || "Type a verse, e.g. John 3:16");
+    if (verseCount(ranges) > max) throw new Error(`Pick a shorter passage (up to ${max} verses)`);
+    const ref = label(ranges);
+    const want = [];
+    for (const r of ranges)
+      for (let c = r.c1; c <= r.c2; c++)
+        for (let v = c === r.c1 ? r.v1 : 1; v <= (c === r.c2 ? r.v2 : books.shape[r.b][c - 1]); v++) want.push({ b: r.b, c, v });
+    // the day's own saved translations first (offline)
+    const saved = entry && entry.verses ? [tr, entry.tr, ...Object.keys(entry.verses)].filter((id, i, a) => id && a.indexOf(id) === i && entry.verses[id]) : [];
+    for (const id of saved) {
+      const vs = entry.verses[id];
+      const got = want.map((w) => vs.find((x) => x.b === w.b && x.c === w.c && x.v === w.v && x.t));
+      if (got.every(Boolean)) return { ref, tr: id, verses: got, text: got.map((v) => v.t).join(" ") };
+    }
+    const id = lookupTr(tr || (entry && entry.tr));
+    if (!id) throw new Error("No translation can be downloaded");
+    const vs = (await verses(ranges, id)).filter((v) => v.t);
+    if (!vs.length) throw new Error("That verse didn't come back. Try again.");
+    return { ref, tr: id, verses: vs, text: vs.map((v) => v.t).join(" ") };
+  }
+
   S.bible = {
+    lookup,
     /** Translations that can be downloaded right now. */
     get TRANSLATIONS() { return S.sources.available((S.app && S.app.settings) || {}); },
     /** Name/notice for any translation id, including ones only found in older saved days. */

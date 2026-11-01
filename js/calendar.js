@@ -25,17 +25,21 @@
     const grid = el("div.cal-grid", {}, dows.map((d) => el("div.cal-dow", {}, d)));
     for (let i = 0; i < cells; i++) {
       const d = ui.addDays(gridStart, i);
-      const s = index[d];
+      const ids = app.idsFor(d);
+      const list = ids.map((k) => index[k]);
       const inMonth = d.slice(0, 7) === ym;
       grid.append(
         el("button.cal-day", {
           class: [!inMonth && "out", d === t && "today"].filter(Boolean).join(" "),
-          title: s ? `${ui.longDate(d)} — ${s.ref || "Journal"}` : `Plan ${ui.longDate(d)}`,
-          onclick: () => (s ? app.go("#/day/" + d) : app.planDialog(d)),
+          title: list.length ? `${ui.longDate(d)} — ${list.map(app.labelOf).join(" · ")}` : `Plan ${ui.longDate(d)}`,
+          onclick: () => (ids.length ? app.go("#/day/" + ids[0]) : app.planDialog(d)),
         },
           el("span.num", {}, +d.slice(8)),
-          s ? el("span.ref", { class: s.ref ? "" : "journal" }, s.ref || "✎ Journal") : el("span.add", {}, "+ plan"),
-          s && s.done ? el("span.done", { title: "Reflection written" }) : null)
+          list.length
+            ? [list.slice(0, 2).map((x) => el("span.ref", { class: x.ref ? "" : "journal" }, app.labelOf(x))),
+              list.length > 2 ? el("span.more", {}, `+${list.length - 2} more`) : null]
+            : el("span.add", {}, "+ plan"),
+          list.some((x) => x.done) ? el("span.done", { title: "Reflection written" }) : null)
       );
     }
 
@@ -49,20 +53,21 @@
       grid);
 
     // side: today's verse, upcoming, S.E.L.A.H. key
-    const todayS = index[t];
+    const todayIds = app.idsFor(t);
+    const todayS = todayIds.map((k) => index[k]).find((x) => x.vod && Object.keys(x.vod).length);
     const tr = app.settings.tr;
     const vod = todayS && (todayS.vod[tr] || Object.values(todayS.vod)[0]);
     const verseCard = el("section.card.verse-card", {},
       el("h3", {}, "Verse of the day"),
       vod
-        ? [el("p.vt", {}, "“", vod.t, "”"), el("div.vr", {}, vod.r), el("div", { style: { marginTop: "12px" } }, el("button.btn.primary", { onclick: () => app.go("#/day/" + t) }, "Open today's page"))]
+        ? [el("p.vt", {}, "“", vod.t, "”"), el("div.vr", {}, vod.r), el("div", { style: { marginTop: "12px" } }, el("button.btn.primary", { onclick: () => app.go("#/day/" + todayIds[0]) }, "Open today's page"))]
         : [el("p.muted", {}, "Nothing planned for today yet."), el("button.btn.primary", { onclick: () => app.planDialog(t) }, "Plan today")]);
 
-    const upcoming = Object.keys(index).filter((d) => d >= t).sort().slice(0, 7);
+    const upcoming = app.sortIds(Object.keys(index).filter((k) => app.dateOf(k) >= t)).slice(0, 7);
     const upCard = el("section.card", {},
       el("h3", {}, "Coming up"),
       upcoming.length
-        ? el("ul.up-list", {}, upcoming.map((d) => el("li", {}, el("button", { onclick: () => app.go("#/day/" + d) }, el("span.d", {}, d === t ? "Today" : ui.fmt(d, { weekday: "short", day: "numeric" })), el("span.r", {}, index[d].ref || "✎ Journal")))))
+        ? el("ul.up-list", {}, upcoming.map((d) => el("li", {}, el("button", { onclick: () => app.go("#/day/" + d) }, el("span.d", {}, app.dateOf(d) === t ? "Today" : ui.fmt(app.dateOf(d), { weekday: "short", day: "numeric" })), el("span.r", {}, app.labelOf(index[d]))))))
         : el("p.muted", { style: { margin: 0 } }, "Plan readings by clicking a date, or use “Plan many days” to read through a book."),
       el("div", { style: { marginTop: "10px" } }, el("button.btn", { onclick: () => app.bulkDialog() }, "Plan many days…")));
 

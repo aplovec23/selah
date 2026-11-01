@@ -203,8 +203,8 @@ main#view { flex: 1; min-height: 0; overflow: auto; position: relative; }
 .dark-paper .letter { background: #8fb39a33; color: #a9cdb4; }
 .sec-h h3 { margin: 0; font-size: 13px; letter-spacing: 2.5px; text-transform: uppercase; font-weight: 800; }
 .sec-h > div { min-width: 0; }
-.sec-h .hint { font-family: var(--serif); font-style: italic; font-size: 14.5px; opacity: .68; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sheet.narrow .sec-h .hint { white-space: normal; font-size: 12.5px; line-height: 15px; }
+.sec-h .hint { font-family: var(--serif); font-style: italic; font-size: 14px; line-height: 17px; opacity: .68; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sheet.narrow .sec-h .hint { font-size: 12px; line-height: 14px; -webkit-line-clamp: 3; }
 .sec-h .ref-line { font-family: var(--serif); font-size: 20px; font-weight: 600; letter-spacing: 0; text-transform: none; }
 
 .scripture { font-family: var(--serif); font-size: 21px; line-height: 32px; }
@@ -345,15 +345,6 @@ main#view { flex: 1; min-height: 0; overflow: auto; position: relative; }
 .side-card.vod { background: linear-gradient(160deg, var(--gold-soft), var(--surface-2)); }
 .side-card .vt { font-family: var(--serif); font-size: 16px; line-height: 1.5; margin: 0 0 6px; }
 .side-card .vr { font-size: 12.5px; font-weight: 700; color: var(--ink-2); }
-.mini-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; text-align: center; }
-.mini-cal .dow { font-size: 10.5px; font-weight: 700; color: var(--ink-3); padding: 2px 0; }
-.mini-cal button { border: 0; background: transparent; border-radius: 8px; height: 30px; font-size: 13px; font-weight: 600; position: relative; color: var(--ink); }
-.mini-cal button:hover { background: var(--surface); }
-.mini-cal button.out { opacity: .35; }
-.mini-cal button.has::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--accent); }
-.mini-cal button.today { color: var(--gold); font-weight: 800; }
-.mini-cal button.cur { background: var(--accent); color: var(--accent-ink); }
-.mini-cal button.cur::after { background: var(--accent-ink); }
 .hl-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .hl-list button { width: 100%; text-align: left; border: 0; background: transparent; padding: 6px; border-radius: 8px; display: flex; gap: 8px; font-family: var(--serif); font-size: 14px; line-height: 1.4; }
 .hl-list button:hover { background: var(--surface); }
@@ -393,10 +384,6 @@ main#view { flex: 1; min-height: 0; overflow: auto; position: relative; }
 .day-top .short { display: none; }
 @media (max-width: 1050px) { .day-top .long { display: none; } .day-top .short { display: inline; } .day-top { gap: 6px; } }
 
-.mini-head { display: flex; align-items: center; justify-content: space-between; margin: -4px -4px 6px; }
-.mini-head .icon-btn { width: 32px; height: 32px; }
-.mini-head .mini-month { border: 0; background: transparent; margin: 0; padding: 4px 8px; border-radius: 8px; cursor: pointer; color: var(--ink); }
-.mini-head .mini-month:hover { background: var(--surface); }
 
 .day-bottom { display: flex; justify-content: center; margin: 28px auto 0; }
 .day-bottom .download { padding: 10px 18px; color: var(--ink-2); }
@@ -433,3 +420,42 @@ main#view { flex: 1; min-height: 0; overflow: auto; position: relative; }
 .start-choice b { display: block; font-size: 16px; }
 .start-choice small { color: var(--ink-2); font-size: 13px; }
 .sheet.capturing { border-radius: 0; box-shadow: none; }
+
+/* several entries on one day (calendar) */
+.cal-day .ref + .ref { -webkit-line-clamp: 1; }
+.cal-day .more { font-size: 11px; color: var(--ink-3); font-weight: 700; }
+.seg.entries button { min-width: 30px; }
+
+/* notes-only pages */
+.sec-h.notes-h { height: 64px; }
+.note-title { font-family: var(--serif); font-size: 26px; line-height: 64px; font-weight: 600; outline: none; width: 100%; white-space: nowrap; overflow: hidden; border-radius: 6px; }
+.note-title:empty::before { content: attr(data-ph); opacity: .38; font-style: italic; font-weight: 400; }
+.capturing .note-title:empty::before { content: none; }
+.note-title:focus { background: #ffffff38; }
+
+/* verses brought in with @ */
+.write blockquote.vcall { margin: 0; padding: 0 0 0 14px; border-left: 3px solid #c39a45; font-style: italic; }
+.write blockquote.vcall b { font-style: normal; font-family: var(--sans); font-size: 14px; letter-spacing: .3px; }
+.write blockquote.vcall .vtr { font-style: normal; font-family: var(--sans); font-size: 11px; opacity: .55; font-weight: 700; }
+.write blockquote.vcall sup { font-family: var(--sans); font-size: 10px; font-style: normal; opacity: .55; line-height: 0; }
+.verse-pick { position: fixed; z-index: 90; width: min(340px, calc(100vw - 16px)); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 30px #0003; padding: 10px; }
+.verse-pick .row { gap: 6px; flex-wrap: nowrap; }
+.verse-pick .btn { padding: 6px 10px; }
+.err.small, .err { color: var(--danger); }
+
+/* text tools: drag by the grip, fold to a small button */
+.fmt .grip { cursor: grab; touch-action: none; color: var(--ink-3); min-width: 26px; padding: 0 2px; }
+.fmt .grip:active { cursor: grabbing; }
+.fmt .tools { display: contents; }
+.fmt .unfold { display: none; }
+.fmt.min .tools { display: none; }
+.fmt.min .unfold { display: inline-block; font-family: var(--serif); }
+
+/* side panel verse search */
+.vs-row { gap: 6px; flex-wrap: nowrap; }
+.vs-row .input { min-width: 0; flex: 1; }
+.vs-result:not(:empty) { margin: 10px 0 2px; }
+.vs-actions { gap: 6px; margin-top: 8px; align-items: center; }
+.vs-actions .btn, .side-card.vod .btn { padding: 6px 12px; }
+.day-bottom { gap: 10px; flex-wrap: wrap; }
+.spacer { flex: 1; }

@@ -8,7 +8,23 @@
   // ---------- data ----------
   const DEFAULTS = { guide: true, tr: "web", bg: "cream", theme: "auto", font: "serif", startWeek: 0, pen: "#2e2a25" };
   let settings = { ...DEFAULTS };
-  let index = {}; // date -> { ref, done, vod: { niv: {r,t}, ... } }
+  let index = {}; // entry id -> { ref, kind, title, done, vod: { web: {r,t}, ... } }
+
+  // ---------- entry ids: a day can hold several entries ----------
+  // The first entry of a day is keyed by its date ("2026-11-01"); more are "2026-11-01_2", "_3", …
+  const dateOf = (id) => String(id || "").slice(0, 10);
+  const entryNo = (id) => +(String(id).split("_")[1] || 1);
+  const byId = (a, b) => (dateOf(a) < dateOf(b) ? -1 : dateOf(a) > dateOf(b) ? 1 : entryNo(a) - entryNo(b));
+  const sortIds = (ids) => ids.slice().sort(byId);
+  const idsFor = (date) => sortIds(Object.keys(index).filter((k) => dateOf(k) === date));
+  function nextId(date) {
+    if (!index[date]) return date;
+    let n = 2;
+    while (index[`${date}_${n}`]) n++;
+    return `${date}_${n}`;
+  }
+  /** Short label for an entry (calendar, lists). */
+  const labelOf = (s) => (s && s.ref) || (s && s.kind === "notes" ? "📝 " + (s.title || "Notes") : "✎ Journal");
 
   async function loadSettings() {
     settings = Object.assign({ ...DEFAULTS }, (await S.store.get("settings")) || {});
@@ -25,9 +41,22 @@
     else document.documentElement.setAttribute("data-theme", settings.theme);
   }
 
-  /** The verse shown in widgets and on the calendar: the key verse if one is starred, else the first verse. */
+  /** The person's favorite verse of the day: one looked up and starred, or a starred verse in the passage. */
+  function favorite(entry) {
+    if (entry.fav && entry.fav.t) return entry.fav;
+    if (!entry.key) return null;
+    const ids = [entry.tr, ...Object.keys(entry.verses || {})];
+    for (const id of ids) {
+      const v = id && (entry.verses[id] || []).find((x) => x.b === entry.key.b && x.c === entry.key.c && x.v === entry.key.v && x.t);
+      if (v) return { r: `${S.bible.bookName(v.b).replace(/^Psalms$/, "Psalm")} ${v.c}:${v.v}`, t: v.t, tr: id };
+    }
+    return null;
+  }
+
+  /** The verse shown in widgets and on the calendar: the favorite verse if one is starred, else the first verse. */
   function verseOfDay(entry) {
     const out = {};
+    if (entry.fav && entry.fav.t) return { [entry.fav.tr || "web"]: { r: entry.fav.r, t: entry.fav.t } };
     for (const id of Object.keys(entry.verses || {})) {
       const t = { id };
       const vs = entry.verses[t.id] || [];
@@ -49,43 +78,47 @@
   function summary(entry) {
     const s = entry.sections || {};
     const wrote = Object.values(s).some((h) => (h || "").replace(/<[^>]+>/g, "").trim()) || (entry.strokes || []).length > 0;
-    return { ref: entry.ref, done: wrote, vod: verseOfDay(entry) };
+    return { ref: entry.ref, kind: entry.kind || null, title: entry.title || "", done: wrote, vod: verseOfDay(entry) };
   }
 
   async function loadIndex() {
     index = (await S.store.get("index")) || {};
   }
 
-  async function getDay(date) {
-    return S.store.get("day/" + date);
+  async function getDay(id) {
+    const e = await S.store.get("day/" + id);
+    if (e && !e.id) e.id = e.date; // saved before a day could hold several entries
+    return e;
   }
 
   async function saveDay(entry, { quiet } = {}) {
     entry.updated = Date.now();
-    await S.store.set("day/" + entry.date, entry);
-    index[entry.date] = summary(entry);
+    entry.id = entry.id || entry.date;
+    await S.store.set("day/" + entry.id, entry);
+    index[entry.id] = summary(entry);
     await S.store.set("index", index);
     if (!quiet) pushWidget();
   }
 
-  async function removeDay(date) {
-    const e = await getDay(date);
+  async function removeDay(id) {
+    const e = await getDay(id);
     for (const it of (e && e.items) || []) if (it.kind === "photo") await S.store.del("photo/" + it.ref);
-    await S.store.del("day/" + date);
-    delete index[date];
+    await S.store.del("day/" + id);
+    delete index[id];
     await S.store.set("index", index);
     pushWidget();
   }
 
   /** Put a passage on a date (keeps the reflection if the day already exists). */
   /** Put a passage on a date: downloads it in every available translation and saves it with the day. */
-  async function planDay(date, input, { keepKey, onStep, pasted, guide } = {}) {
+  async function planDay(id, input, { keepKey, onStep, pasted, guide } = {}) {
+    const date = dateOf(id);
     const { ranges, errors } = S.bible.parse(input);
     if (errors.length || !ranges.length) throw new Error(errors[0] || "Type a passage, e.g. John 3:16–21");
     if (S.bible.verseCount(ranges) > S.bible.MAX_VERSES) throw new Error(`That's more than ${S.bible.MAX_VERSES} verses — try a shorter passage`);
-    const old = await getDay(date);
+    const old = await getDay(id);
     const entry = old || {
-      date, sections: { e: "", l: "", a: "", h: "" }, strokes: [], items: [], hl: {},
+      id, date, sections: { e: "", l: "", a: "", h: "" }, strokes: [], items: [], hl: {},
       bg: settings.bg, width: window.innerWidth < 600 ? 440 : 720, tr: settings.tr, guide: settings.guide !== false,
     };
     let verses;
@@ -109,16 +142,17 @@
       entry.hl = {};
       if (!keepKey) entry.key = null;
     }
+    if (entry.kind === "notes") entry.kind = null; // a notes page that now has a passage
     await saveDay(entry);
     return entry;
   }
 
-  /** A day for free writing only: no passage, guide off. */
-  async function journalDay(date) {
-    let entry = await getDay(date);
+  /** An entry for free writing only: no passage, guide off. With notes: a titled page of notes. */
+  async function journalDay(id, { notes } = {}) {
+    let entry = await getDay(id);
     if (!entry) {
       entry = {
-        date, ranges: [], verses: {}, ref: "", tr: null, guide: false,
+        id, date: dateOf(id), ranges: [], verses: {}, ref: "", tr: null, guide: false, kind: notes ? "notes" : null, title: "",
         sections: { e: "", l: "", a: "", h: "", j: "" }, strokes: [], items: [], hl: {},
         bg: settings.bg, width: window.innerWidth < 600 ? 440 : 720,
       };
@@ -175,8 +209,8 @@
     const days = [];
     for (let i = -1; i <= 60; i++) {
       const d = ui.addDays(start, i);
-      const s = index[d];
-      if (!s || !s.vod) continue;
+      const s = idsFor(d).map((k) => index[k]).find((x) => x && x.vod && Object.keys(x.vod).length);
+      if (!s) continue;
       const id = s.vod[settings.tr] ? settings.tr : Object.keys(s.vod)[0];
       const v = id && s.vod[id];
       if (v) days.push({ date: d, passage: s.ref, ref: v.r, text: v.t, tr: trName(id) });
@@ -199,7 +233,7 @@
     const host = document.getElementById("view");
     host.innerHTML = "";
     host.scrollTop = 0;
-    if (view === "day" && arg) current = await S.day.show(host, arg);
+    if (view === "day" && arg) current = await S.day.show(host, decodeURIComponent(arg));
     else current = await S.calendar.show(host, arg);
   }
   const go = (hash) => {
@@ -208,7 +242,19 @@
   };
 
   // ---------- plan dialog ----------
-  function planDialog(date, existing, { paste = false } = {}) {
+  /** Save what the open page has typed before something else changes the same entry. */
+  async function flushPage() {
+    if (current && current.flush) await current.flush();
+  }
+
+  /** Where a new entry on date d goes: the id it was opened for, the date itself, or a further entry. */
+  function newIdFor(d, wanted) {
+    if (wanted && dateOf(wanted) === d && !index[wanted]) return wanted;
+    return nextId(d);
+  }
+
+  function planDialog(dateOrId, existing, { paste = false, id: wantId } = {}) {
+    const date = dateOrId && dateOf(dateOrId);
     ui.dialog((box, close) => {
       let pasteMode = paste;
       const pasteBox = el("textarea.input", { rows: 7, placeholder: "Paste the passage here. Verse numbers (16 For God so loved… 17 For God did not…) are optional but let you highlight verse by verse." });
@@ -269,20 +315,28 @@
         try {
           const d = dateIn.value;
           if (!d) throw new Error("Pick a date");
-          if (!existing && index[d] && !(await ui.confirmBox("Replace passage?", `${ui.longDate(d)} already has ${index[d].ref}. Its reflection stays; only the passage changes.`, "Replace"))) {
-            save.disabled = false;
-            return;
+          let id;
+          if (existing && dateOf(existing.id || existing.date) === d) id = existing.id || existing.date; // change this entry's passage
+          else {
+            id = newIdFor(d, wantId);
+            const others = idsFor(d);
+            if (others.length && id !== wantId && !(await ui.confirmBox("Add another entry?",
+              `${ui.longDate(d)} already has ${others.map((k) => labelOf(index[k])).join(", ")}. This adds a new entry for the same day; ${others.length > 1 ? "the others stay" : "it stays"} as ${others.length > 1 ? "they are" : "it is"}.`, "Add entry"))) {
+              save.disabled = false;
+              return;
+            }
           }
+          if (pasteMode && !pasteBox.value.trim()) throw new Error("Paste the passage text first");
+          await flushPage(); // the open page's last typing first, so it can't overwrite the new passage
           if (pasteMode) {
-            if (!pasteBox.value.trim()) throw new Error("Paste the passage text first");
-            await planDay(d, refIn.value, { pasted: { name: pasteName.value, text: pasteBox.value }, guide: guideSw.get() });
+            await planDay(id, refIn.value, { pasted: { name: pasteName.value, text: pasteBox.value }, guide: guideSw.get() });
           } else {
             prev.replaceChildren(el("span.muted", {}, "Downloading the passage for offline reading…"));
-            await planDay(d, refIn.value, { guide: guideSw.get(), onStep: (k, total) => prev.replaceChildren(el("span.muted", {}, `Downloading… ${k} of ${total} translations`)) });
+            await planDay(id, refIn.value, { guide: guideSw.get(), onStep: (k, total) => prev.replaceChildren(el("span.muted", {}, `Downloading… ${k} of ${total} translations`)) });
           }
           close();
           ui.toast(`Saved for ${ui.shortDate(d)}`);
-          go("#/day/" + d);
+          go("#/day/" + id);
         } catch (err) {
           prev.hidden = false;
           prev.replaceChildren(el("span.err", {}, err.message));
@@ -299,7 +353,8 @@
         el("div.row", { style: { marginTop: "8px", alignItems: "center", justifyContent: "space-between" } }, modeBtn, guideSw),
         el("div.actions", {},
           el("button.btn", { onclick: () => { close(); bulkDialog(); } }, "Plan many days…"),
-          existing ? null : el("button.btn", { title: "A page for free writing, with no passage", onclick: async () => { const d = dateIn.value || ui.today(); await journalDay(d); close(); go("#/day/" + d); } }, "✎ Just journal"),
+          existing ? null : el("button.btn", { title: "A page for free writing, with no passage", onclick: async () => { const d = dateIn.value || ui.today(); const id = newIdFor(d, wantId); await journalDay(id); close(); go("#/day/" + id); } }, "✎ Just journal"),
+          existing ? null : el("button.btn", { title: "A titled page of notes only (sermon, study…), with no passage", onclick: async () => { const d = dateIn.value || ui.today(); const id = newIdFor(d, wantId); await journalDay(id, { notes: true }); close(); go("#/day/" + id); } }, "📝 Notes only"),
           el("span.spacer"), el("button.btn", { onclick: close }, "Cancel"), save)
       );
       setMode(pasteMode);
@@ -341,7 +396,7 @@
             const c2 = Math.min(n, c + step - 1);
             note.textContent = `Downloading day ${k + 1} of ${totalDays} (${names[b]} ${c}${c2 > c ? "–" + c2 : ""})… Keep Selah open.`;
             bar.firstChild.style.width = Math.round((k / totalDays) * 100) + "%";
-            if (index[d]) skipped++;
+            if (idsFor(d).length) skipped++;
             else {
               try {
                 await planDay(d, `${names[b]} ${c}${c2 > c ? "-" + c2 : ""}`);
@@ -426,8 +481,8 @@
     ui.toast("Preparing backup…");
     const days = [];
     const photos = {};
-    for (const d of Object.keys(index).sort()) {
-      const e = await getDay(d);
+    for (const id of sortIds(Object.keys(index))) {
+      const e = await getDay(id);
       if (!e) continue;
       days.push(e);
       for (const it of e.items || []) if (it.kind === "photo" && !photos[it.ref]) photos[it.ref] = await S.store.get("photo/" + it.ref);
@@ -452,7 +507,8 @@
       } catch {
         return ui.toast("That isn't a Selah backup file");
       }
-      const clash = data.days.filter((d) => index[d.date]).length;
+      for (const e of data.days) e.id = e.id || e.date;
+      const clash = data.days.filter((d) => index[d.id]).length;
       let replace = true;
       if (clash) {
         replace = await ui.confirmBox("Some days already exist",
@@ -471,7 +527,7 @@
       }
       let n = 0;
       for (const e of data.days) {
-        if (index[e.date] && !replace) continue;
+        if (index[e.id] && !replace) continue;
         for (const it of e.items || []) if (it.kind === "photo" && data.photos && data.photos[it.ref]) await S.store.set("photo/" + it.ref, data.photos[it.ref]);
         await saveDay(e, { quiet: true });
         n++;
@@ -495,8 +551,8 @@
     document.getElementById("go-settings").onclick = settingsDialog;
     window.addEventListener("hashchange", route);
     // Native shells can open a specific day (e.g. tapping the widget).
-    window.SelahOpenDay = (d) => go(index[d] ? "#/day/" + d : "#/cal/" + d.slice(0, 7));
-    if (!location.hash) location.hash = index[ui.today()] ? "#/day/" + ui.today() : "#/cal";
+    window.SelahOpenDay = (d) => go(idsFor(d).length ? "#/day/" + idsFor(d)[0] : "#/cal/" + d.slice(0, 7));
+    if (!location.hash) location.hash = idsFor(ui.today()).length ? "#/day/" + idsFor(ui.today())[0] : "#/cal";
     else route();
     pushWidget();
     // web version only: keep the app's files for offline use and allow "Add to Home Screen"
@@ -517,7 +573,8 @@
   S.app = {
     get settings() { return settings; },
     get index() { return index; },
-    saveSettings, getDay, saveDay, removeDay, planDay, journalDay, planDialog, bulkDialog, go, route, verseOfDay, pushWidget,
+    saveSettings, getDay, saveDay, removeDay, planDay, journalDay, planDialog, bulkDialog, go, route, verseOfDay, favorite, pushWidget,
+    dateOf, idsFor, sortIds, nextId, labelOf, flushPage,
   };
 
   window.addEventListener("DOMContentLoaded", () =>

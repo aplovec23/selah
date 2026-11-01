@@ -128,17 +128,40 @@
 
   const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
   const debounce = (fn, ms) => {
-    let t;
+    let t, pending = false;
     const d = (...a) => {
       clearTimeout(t);
-      t = setTimeout(() => fn(...a), ms);
+      pending = true;
+      t = setTimeout(() => { pending = false; fn(...a); }, ms);
     };
+    // run now, but only if a call is still waiting (so a stale copy never overwrites newer data)
     d.flush = (...a) => {
       clearTimeout(t);
-      fn(...a);
+      if (!pending) return;
+      pending = false;
+      return fn(...a);
     };
     return d;
   };
+
+  /** Copy text to the clipboard (with a fallback for older web views). */
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {}
+    const ta = el("textarea", { style: { position: "fixed", top: "-1000px", opacity: "0" }, readonly: true });
+    ta.value = text;
+    document.body.append(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch {}
+    ta.remove();
+    return ok;
+  }
 
   /** Small on/off switch with a label. onChange(checked) */
   function toggle(label, checked, onChange, title) {
@@ -151,5 +174,5 @@
     return node;
   }
 
-  S.ui = { toggle, el, iso, parseIso, today, addDays, longDate, weekday, shortDate, fmt, toast, dialog, confirmBox, popover, closePop, uid, debounce };
+  S.ui = { copyText, toggle, el, iso, parseIso, today, addDays, longDate, weekday, shortDate, fmt, toast, dialog, confirmBox, popover, closePop, uid, debounce };
 })();

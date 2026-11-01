@@ -1,4 +1,4 @@
-/* Companion panel beside a day's page: Today (mini calendar, verse, coming up, this page's highlights),
+/* Companion panel beside a day's page: Today (verse search, favorite verse, this page's highlights, coming up),
  * Prayer list and Memory verse.
  * Docked on wide screens; a slide-over drawer on smaller ones. */
 (function () {
@@ -16,7 +16,7 @@
   const setPref = (k, v) => { try { localStorage.setItem("selah." + k, v); } catch {} };
 
   /**
-   * ctx: { date, entry, art, go(hash), scrollToVerse(k) }
+   * ctx: { date, id, entry, art, go(hash), scrollToVerse(k), setFav(fav|null) }
    * Returns { node, toggle(), refresh(), destroy() }.
    */
   function mount(ctx) {
@@ -41,29 +41,13 @@
     }
 
     // ---------- Today ----------
-    let viewYM = ctx.date.slice(0, 7); // month shown in the mini calendar
+    // verse search: look up any verse, copy it, or keep it as the favorite verse of the day
+    let found = null; // { ref, text, tr }
+    let query = "";
     function renderToday() {
       const index = app.index;
-      const [y, m] = viewYM.split("-").map(Number);
-      const first = new Date(y, m - 1, 1);
-      const startDow = app.settings.startWeek || 0;
-      const lead = (first.getDay() - startDow + 7) % 7;
-      const start = ui.addDays(ui.iso(first), -lead);
-      const cells = Math.ceil((lead + new Date(y, m, 0).getDate()) / 7) * 7;
-      const t = ui.today();
-      const grid = el("div.mini-cal", {},
-        [...Array(7)].map((_, i) => el("span.dow", {}, ui.fmt(ui.addDays("2023-01-01", (i + startDow) % 7), { weekday: "narrow" }))));
-      for (let i = 0; i < cells; i++) {
-        const d = ui.addDays(start, i);
-        grid.append(el("button", {
-          class: [d.slice(0, 7) !== viewYM && "out", index[d] && "has", d === t && "today", d === ctx.date && "cur"].filter(Boolean).join(" "),
-          title: index[d] ? `${ui.shortDate(d)} — ${index[d].ref || "Journal"}` : ui.shortDate(d),
-          onclick: () => (index[d] ? ctx.go("#/day/" + d) : app.planDialog(d)),
-        }, +d.slice(8)));
-      }
-      const s = index[ctx.date];
-      const v = s && (s.vod[ctx.entry.tr] || s.vod[app.settings.tr] || Object.values(s.vod)[0]);
-      const upcoming = Object.keys(index).filter((d) => d > ctx.date).sort().slice(0, 5);
+      const fav = app.favorite(ctx.entry);
+      const upcoming = app.sortIds(Object.keys(index).filter((k) => app.dateOf(k) > ctx.date)).slice(0, 5);
 
       const marks = (ctx.entry.hl[ctx.entry.tr] || []).slice().sort((a, b) => {
         const [ab, ac, av] = a.k.split(":").map(Number), [bb, bc, bv] = b.k.split(":").map(Number);
@@ -79,33 +63,67 @@
           el("span", {}, el("b", {}, `${c}:${vv} `), "“", text, "”")));
       });
 
+      // ---- verse search ----
+      const q = el("input.input", { type: "search", placeholder: "Search a verse, e.g. Psalm 23:1", value: query, autocomplete: "off", spellcheck: "false", enterkeyhint: "search" });
+      const result = el("div.vs-result");
+      const copyBtn = el("button.btn", { title: "Copy the verse", disabled: !found, onclick: async () => {
+        if (!found) return;
+        const ok = await ui.copyText(`“${found.text}” — ${found.ref} (${S.bible.trInfo(found.tr).name})`);
+        ui.toast(ok ? "Verse copied" : "Couldn't copy on this device");
+      } }, "Copy");
+      const clearBtn = el("button.btn", { title: "Clear the search", onclick: () => { query = ""; found = null; render(); setTimeout(() => body.querySelector("input[type=search]")?.focus(), 0); } }, "Clear");
+      const favBtn = el("button.btn", { title: "Keep as the favorite verse of the day (the passage and writing stay as they are)", disabled: !found, onclick: () => found && ctx.setFav({ r: found.ref, t: found.text, tr: found.tr }) }, "★ Favorite");
+      const drawResult = () => {
+        if (found) result.replaceChildren(el("p.vt", {}, "“", found.text, "”"), el("div.vr", {}, `${found.ref} · ${S.bible.trInfo(found.tr).name}`));
+        else result.replaceChildren();
+        copyBtn.disabled = favBtn.disabled = !found;
+      };
+      let ask = 0;
+      const search = async () => {
+        query = q.value.trim();
+        if (!query) { found = null; return drawResult(); }
+        const mine = ++ask;
+        result.replaceChildren(el("p.muted.small", {}, "Looking it up…"));
+        try {
+          const got = await S.bible.lookup(query, { entry: ctx.entry, max: 30 });
+          if (mine !== ask) return;
+          found = { ref: got.ref, text: got.text, tr: got.tr };
+          drawResult();
+        } catch (e) {
+          if (mine !== ask) return;
+          found = null;
+          drawResult();
+          result.replaceChildren(el("p.err.small", {}, e.message));
+        }
+      };
+      q.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); search(); } });
+      q.addEventListener("input", () => { query = q.value; });
+      drawResult();
+
       body.append(
-        el("section.side-card", {},
-          el("div.mini-head", {},
-            el("button.icon-btn", { title: "Previous month", "aria-label": "Previous month", onclick: () => stepMonth(-1), html: '<svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' }),
-            el("button.side-title.mini-month", { title: "Back to this page's month", onclick: () => { viewYM = ctx.date.slice(0, 7); render(); } }, first.toLocaleDateString(undefined, { month: "long", year: "numeric" })),
-            el("button.icon-btn", { title: "Next month", "aria-label": "Next month", onclick: () => stepMonth(1), html: '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' })),
-          grid),
-        v ? el("section.side-card.vod", {},
-          el("div.side-title", {}, ctx.entry.key ? "★ Verse of the day" : "Verse of the day"),
-          el("p.vt", {}, "“", v.t, "”"), el("div.vr", {}, v.r),
-          !ctx.entry.key ? el("p.muted.small", {}, "Tip: select words in the passage and tap ★ to choose a different verse.") : null) : null,
+        el("section.side-card.vsearch", {},
+          el("div.side-title", {}, "Verse search"),
+          el("div.row.vs-row", {}, q, el("button.btn.primary", { onclick: search }, "Search")),
+          result,
+          el("div.row.vs-actions", {}, copyBtn, clearBtn, el("span.spacer"), favBtn)),
+        el("section.side-card.vod", {},
+          el("div.side-title", {}, "★ Favorite verse of the day"),
+          fav
+            ? [el("p.vt", {}, "“", fav.t, "”"), el("div.vr", {}, fav.r, fav.tr ? ` · ${S.bible.trInfo(fav.tr).name}` : ""),
+              el("div.row", { style: { marginTop: "8px" } },
+                el("button.btn", { onclick: async () => ui.toast((await ui.copyText(`“${fav.t}” — ${fav.r}`)) ? "Verse copied" : "Couldn't copy on this device") }, "Copy"),
+                el("button.btn", { onclick: () => ctx.setFav(null) }, "Clear"))]
+            : el("p.muted.small", { style: { margin: 0 } }, "Pick the verse that speaks to you today: select words in the passage and tap ★ Favorite, or search a verse above. Your passage and writing stay as they are.")),
         el("section.side-card", {},
           el("div.side-title", {}, `Highlights on this page`),
           hlList.length ? el("ul.hl-list", {}, hlList) : el("p.muted.small", {}, "Select words in the passage to highlight them — they'll be collected here.")),
         el("section.side-card", {},
           el("div.side-title", {}, "Coming up"),
           upcoming.length
-            ? el("ul.up-list", {}, upcoming.map((d) => el("li", {}, el("button", { onclick: () => ctx.go("#/day/" + d) }, el("span.d", {}, ui.fmt(d, { weekday: "short", day: "numeric" })), el("span.r", {}, index[d].ref || "✎ Journal")))))
+            ? el("ul.up-list", {}, upcoming.map((d) => el("li", {}, el("button", { onclick: () => ctx.go("#/day/" + d) }, el("span.d", {}, ui.fmt(app.dateOf(d), { weekday: "short", day: "numeric" })), el("span.r", {}, app.labelOf(index[d]))))))
             : el("p.muted.small", {}, "Nothing planned after this day."),
           el("button.btn", { style: { marginTop: "8px" }, onclick: () => app.planDialog(ui.addDays(ctx.date, 1)) }, "＋ Plan the next day"))
       );
-    }
-
-    function stepMonth(n) {
-      const [y, m] = viewYM.split("-").map(Number);
-      viewYM = ui.iso(new Date(y, m - 1 + n, 1)).slice(0, 7);
-      render();
     }
 
     // ---------- Prayer list (shared by all days) ----------
@@ -151,6 +169,11 @@
         render();
       };
       const fromPage = async () => {
+        const fav = app.favorite(ctx.entry);
+        if (fav) {
+          await S.store.set("memory", { ref: fav.r, text: fav.t, tr: fav.tr || ctx.entry.tr, since: ctx.date, level: 0 });
+          return render();
+        }
         const vs = ctx.entry.verses[ctx.entry.tr] || [];
         const k = ctx.entry.key;
         const v = (k && vs.find((x) => x.b === k.b && x.c === k.c && x.v === k.v)) || vs.find((x) => x.t);
@@ -166,7 +189,7 @@
       };
       refIn.addEventListener("keydown", (e) => e.key === "Enter" && fromRef());
       const chooser = el("div", {},
-        el("button.btn", { onclick: fromPage }, ctx.entry.key ? "Use this page's ★ verse" : "Use this page's first verse"),
+        el("button.btn", { onclick: fromPage }, app.favorite(ctx.entry) ? "Use my ★ favorite verse" : "Use this page's first verse"),
         el("div.row", { style: { marginTop: "8px" } }, refIn, el("button.btn", { onclick: fromRef }, "Set")));
 
       if (!mem) {

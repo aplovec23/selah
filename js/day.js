@@ -10,9 +10,9 @@
   // The S.E.L.A.H. devotional flow (S is the passage itself, shown above these).
   const SCRIPTURE_HINT = "Let the word be set before you, that it may guide your steps.";
   const SECTIONS = [
-    { k: "e", letter: "E", title: "Examine", hint: "Consider the meaning, and ponder the truth revealed.", ph: "What does this passage say? What truth stands out to you?" },
-    { k: "l", letter: "L", title: "Lesson", hint: "Take hold of the teaching, that wisdom may dwell within you.", ph: "The lesson I'm taking hold of today…" },
-    { k: "a", letter: "A", title: "Acknowledge", hint: "Lift up your prayer in thanksgiving, confession, and praise.", ph: "Lord, I thank you for…  I confess…  I praise you because…" },
+    { k: "e", letter: "E", title: "Examine", hint: "Consider the meaning, and ponder the truth revealed. Ask questions about the passage.", ph: "What does this passage say? What truth stands out to you?" },
+    { k: "l", letter: "L", title: "Lesson", hint: "Take hold of the teaching, that wisdom may dwell within you. What verse caught your heart?", ph: "The lesson I'm taking hold of today…" },
+    { k: "a", letter: "A", title: "Acknowledge", hint: "Lift up your prayer in thanksgiving, confession, and praise.", ph: "Lord, I thank you for…  I confess…  I praise you because…  (Use ☑ for prayer points: unchecked ones carry to the next day.)" },
     { k: "h", letter: "H", title: "Heart", hint: "Plant this truth deep within, and meditate upon it day and night.", ph: "Write, draw, or sit quietly with the words to carry in your heart…" },
   ];
   const HL_COLORS = ["#fff176", "#b9f6ca", "#b3e5fc", "#f8bbd0", "#ffd180", "#d1c4e9"];
@@ -37,24 +37,33 @@
     return doc.body.firstChild.innerHTML;
   }
 
-  async function show(host, date) {
+  async function show(host, id) {
     const app = S.app;
-    let entry = await app.getDay(date);
+    const date = app.dateOf(id);
+    let entry = await app.getDay(id);
+    if (!entry && id === date && app.idsFor(date).length) {
+      // the day's first entry was deleted: open the next one
+      app.go("#/day/" + app.idsFor(date)[0]);
+      return {};
+    }
     if (!entry) {
-      // nothing planned for this day yet: offer the three ways to start
+      // nothing here yet: offer the ways to start
       const isToday = date === ui.today();
+      const extra = app.idsFor(date).length > 0;
       const choice = (icon, title, text, onclick, primary) =>
         el("button.start-choice", { class: primary ? "primary" : "", onclick }, el("span.ic", {}, icon), el("span", {}, el("b", {}, title), el("small", {}, text)));
       host.append(el("div.cal-wrap", { style: { display: "block", maxWidth: "560px" } },
         el("div.card.start-card", {},
           el("p.muted", { style: { margin: "0 0 2px", fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase", fontSize: "12px" } }, ui.weekday(date)),
           el("h2", {}, ui.longDate(date)),
-          el("p.muted", {}, isToday ? "Nothing planned for today yet. How would you like to start?" : "Nothing planned for this day yet."),
+          el("p.muted", {}, extra ? "A new entry for this day. How would you like to start?" : isToday ? "Nothing planned for today yet. How would you like to start?" : "Nothing planned for this day yet."),
           el("div.start-choices", {},
-            choice("📖", "Choose a passage", "Type a reference and download it (needs internet).", () => app.planDialog(date), true),
-            choice("📋", "Paste a passage", "Paste from your Bible app or a website — works offline.", () => app.planDialog(date, null, { paste: true })),
-            choice("✎", "Just journal", "A blank page to write freely, no passage.", async () => { await app.journalDay(date); app.go("#/day/" + date); })),
-          el("div", { style: { marginTop: "14px" } }, el("button.btn.ghost", { onclick: () => app.go("#/cal/" + date.slice(0, 7)) }, "‹ Back to calendar")))));
+            choice("📖", "Choose a passage", "Type a reference and download it (needs internet).", () => app.planDialog(date, null, { id }), true),
+            choice("📋", "Paste a passage", "Paste from your Bible app or a website — works offline.", () => app.planDialog(date, null, { paste: true, id })),
+            choice("✎", "Just journal", "A blank page to write freely, no passage.", async () => { await app.journalDay(id); app.go("#/day/" + id); }),
+            choice("📝", "Notes only", "A titled page of notes — sermon, study, ideas. Type @ to add a verse.", async () => { await app.journalDay(id, { notes: true }); app.go("#/day/" + id); })),
+          el("div", { style: { marginTop: "14px" } },
+            extra ? el("button.btn.ghost", { onclick: () => app.go("#/day/" + app.idsFor(date)[0]) }, "‹ Back to this day") : el("button.btn.ghost", { onclick: () => app.go("#/cal/" + date.slice(0, 7)) }, "‹ Back to calendar")))));
       return {};
     }
     entry.sections = entry.sections || { e: "", l: "", a: "", h: "" };
@@ -62,6 +71,9 @@
     if (!entry.verses[entry.tr]) entry.tr = entry.verses[app.settings.tr] ? app.settings.tr : savedTr(entry)[0];
     const TR = savedTr(entry).map((id) => ({ id, name: S.bible.trInfo(id).name }));
     entry.sections.j = entry.sections.j || "";
+    entry.id = entry.id || id;
+    const isNotes = entry.kind === "notes";
+    const hasPassage = Object.keys(entry.verses || {}).length > 0;
 
     const save = ui.debounce(() => app.saveDay(entry), 500);
     // save right away if the app is hidden or closed mid-typing
@@ -76,29 +88,48 @@
     sheet.style.width = entry.width + "px";
     const holder = el("div.sheet-holder", {}, sheet);
     const scroller = el("div.day-scroll");
-    const planned = Object.keys(app.index).sort();
-    const at = planned.indexOf(date);
+    const planned = app.sortIds(Object.keys(app.index));
+    const at = planned.indexOf(id);
     const prev = planned[at - 1], next = planned[at + 1];
+    const sameDay = app.idsFor(date);
+    // several entries on this day: switch between them
+    const entrySeg = sameDay.length > 1 ? el("div.seg.entries", { title: "Entries on this day" },
+      sameDay.map((k, i) => el("button", { class: k === id ? "on" : "", title: app.labelOf(app.index[k]), onclick: () => k !== id && app.go("#/day/" + k) }, `${i + 1}`)),
+      el("button", { title: "New entry for this day", onclick: () => app.go("#/day/" + app.nextId(date)) }, "＋")) : null;
 
     const guideSwitch = ui.toggle("S.E.L.A.H.", entry.guide !== false, (on) => setGuide(on), "S.E.L.A.H. guide on/off — off gives one open writing area");
+    if (isNotes) guideSwitch.hidden = true;
     const trSeg = el("div.seg", { title: "Translation", hidden: TR.length < 2 }, TR.map((t) =>
       el("button", { class: t.id === entry.tr ? "on" : "", onclick: () => setTr(t.id) }, t.name)));
     const menuBtn = el("button.icon-btn", { title: "More", "aria-label": "More", html: '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></svg>' });
     menuBtn.onclick = () => ui.popover(menuBtn, (p, close) => {
       p.append(el("div", { style: { display: "grid", gap: "4px", minWidth: "200px" } },
-        el("button.btn.ghost", { onclick: () => { close(); app.planDialog(date, entry); } }, "Change passage"),
-        el("button.btn.ghost", { onclick: () => { close(); app.planDialog(date, entry, { paste: true }); } }, "Paste my own text"),
-        el("button.btn.ghost", { onclick: () => { close(); setGuide(entry.guide === false); } },
+        el("button.btn.ghost", { onclick: () => { close(); app.go("#/day/" + app.nextId(date)); } }, "＋ New entry for this day"),
+        el("button.btn.ghost", { onclick: () => { close(); app.planDialog(id, entry); } }, hasPassage ? "Change passage" : "Add a passage"),
+        el("button.btn.ghost", { onclick: () => { close(); app.planDialog(id, entry, { paste: true }); } }, "Paste my own text"),
+        isNotes ? null : el("button.btn.ghost", { onclick: () => { close(); setGuide(entry.guide === false); } },
           entry.guide === false ? "Use the S.E.L.A.H. guide" : "Free journal (turn off guide)"),
+        el("button.btn.ghost", { onclick: () => { close(); copyPage(); } }, "Copy page text"),
         el("button.btn.ghost", { onclick: () => { close(); savePhoto(); } }, "Save page as photo"),
-        el("button.btn.ghost", { onclick: () => { close(); clearKey(); } }, "Clear verse of the day"),
-        el("button.btn.ghost.danger", { onclick: async () => { close(); if (await ui.confirmBox("Delete this day?", `${ui.longDate(date)} — the passage, reflection, drawings and photos will be removed.`, "Delete", true)) { await app.removeDay(date); app.go("#/cal/" + date.slice(0, 7)); } } }, "Delete day")));
+        app.favorite(entry) ? el("button.btn.ghost", { onclick: () => { close(); setFav(null); } }, "Clear favorite verse") : null,
+        el("button.btn.ghost.danger", { onclick: async () => {
+          close();
+          const many = app.idsFor(date).length > 1;
+          if (await ui.confirmBox(many ? "Delete this entry?" : "Delete this day?", `${ui.longDate(date)}${entry.ref ? " · " + entry.ref : ""} — the passage, writing, drawings and photos of this entry will be removed.`, "Delete", true)) {
+            save.flush();
+            await app.removeDay(id);
+            const left = app.idsFor(date);
+            app.go(left.length ? "#/day/" + left[0] : "#/cal/" + date.slice(0, 7));
+          }
+        } }, many() ? "Delete this entry" : "Delete day")));
     }, { side: "below" });
+    const many = () => app.idsFor(date).length > 1;
 
     const top = el("div.day-top", {},
       el("button.btn.ghost", { onclick: () => app.go("#/cal/" + date.slice(0, 7)) }, "‹ Calendar"),
       el("button.icon-btn", { title: prev ? "Previous reading" : "", disabled: !prev, style: { opacity: prev ? 1 : 0.3 }, onclick: () => prev && app.go("#/day/" + prev), html: '<svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' }),
       el("button.icon-btn", { title: next ? "Next reading" : "", disabled: !next, style: { opacity: next ? 1 : 0.3 }, onclick: () => next && app.go("#/day/" + next), html: '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' }),
+      entrySeg,
       el("span.spacer"),
       guideSwitch,
       trSeg,
@@ -107,6 +138,8 @@
     let side = null;
     // saving the page as a picture lives at the very bottom, out of the way while writing
     const bottom = el("div.day-bottom", {},
+      el("button.btn.download", { onclick: () => copyPage(), title: "Copy this page's text",
+        html: '<svg viewBox="0 0 24 24" width="18" height="18"><rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" fill="none" stroke="currentColor" stroke-width="2"/></svg> Copy' }),
       el("button.btn.download", { onclick: () => savePhoto(), title: "Save this whole page as a picture",
         html: '<svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Download page as photo' }));
     scroller.append(top, holder, bottom);
@@ -115,16 +148,46 @@
 
     // ---------- page content ----------
     const scripture = el("div.scripture");
-    const hasPassage = Object.keys(entry.verses || {}).length > 0;
     // Free journal style: one open writing area instead of E/L/A/H (both are kept; only one shows)
     function journalSection() {
-      const w = el("div.write.journal-write", { contenteditable: "true", "data-ph": hasPassage ? "Write freely — thoughts, prayers, notes, anything on your heart…" : "Write freely…", "data-k": "j", spellcheck: "true", html: clean(entry.sections.j) });
-      w.addEventListener("input", () => { entry.sections.j = w.innerHTML; save(); art.resize(); });
-      w.addEventListener("paste", (e) => { e.preventDefault(); document.execCommand("insertText", false, (e.clipboardData || window.clipboardData).getData("text/plain")); });
-      return el("section.sec.journal", { "data-anchor": "j" }, el("div.sec-h.plain", {}, el("h3", {}, "Journal")), w);
+      const ph = isNotes ? "Your notes… Type @ to add a verse (e.g. @John 3:16)." : hasPassage ? "Write freely — thoughts, prayers, notes, anything on your heart…" : "Write freely…";
+      const w = el("div.write.journal-write", { contenteditable: "true", "data-ph": ph, "data-k": "j", spellcheck: "true", html: clean(entry.sections.j) });
+      wireWrite(w, "j");
+      let head = el("h3", {}, "Journal");
+      if (isNotes) {
+        // a notes page has its own title line
+        head = el("div.note-title", { contenteditable: "true", spellcheck: "true", "data-ph": "Title — e.g. Sunday sermon, Bible study" });
+        head.textContent = entry.title || "";
+        head.addEventListener("input", () => { entry.title = head.textContent.trim(); save(); });
+        head.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); w.focus(); } });
+        head.addEventListener("paste", (e) => { e.preventDefault(); document.execCommand("insertText", false, (e.clipboardData || window.clipboardData).getData("text/plain").replace(/\s+/g, " ")); });
+      }
+      return el("section.sec.journal", { "data-anchor": "j" }, el("div.sec-h.plain", { class: isNotes ? "notes-h" : "" }, head), w);
+    }
+    /** Typing, pasting, checklists and @verse calls in a writing area. */
+    function wireWrite(w, k) {
+      w.addEventListener("input", (e) => {
+        entry.sections[k] = w.innerHTML;
+        save();
+        art.resize(); // pinned drawings below follow the text
+        if (e.inputType && e.inputType.startsWith("insert")) atCheck(w);
+      });
+      w.addEventListener("paste", (e) => {
+        e.preventDefault();
+        document.execCommand("insertText", false, (e.clipboardData || window.clipboardData).getData("text/plain"));
+      });
+      w.addEventListener("click", (e) => {
+        const li = e.target.closest("ul.checks li");
+        if (li && e.offsetX < 26) {
+          li.classList.toggle("ok");
+          entry.sections[k] = w.innerHTML;
+          save();
+        }
+      });
     }
     function applyGuide() {
-      sheet.classList.toggle("free", entry.guide === false);
+      sheet.classList.toggle("free", entry.guide === false || isNotes);
+      sheet.classList.toggle("notes", isNotes);
     }
     function setGuide(on) {
       entry.guide = !!on;
@@ -141,23 +204,7 @@
         el("div.copyright", { "data-tr": "" })),
       SECTIONS.map((s) => {
         const w = el("div.write", { contenteditable: "true", "data-ph": s.ph, "data-k": s.k, spellcheck: "true", html: clean(entry.sections[s.k]) });
-        w.addEventListener("input", () => {
-          entry.sections[s.k] = w.innerHTML;
-          save();
-          art.resize(); // pinned drawings below follow the text
-        });
-        w.addEventListener("paste", (e) => {
-          e.preventDefault();
-          document.execCommand("insertText", false, (e.clipboardData || window.clipboardData).getData("text/plain"));
-        });
-        w.addEventListener("click", (e) => {
-          const li = e.target.closest("ul.checks li");
-          if (li && e.offsetX < 26) {
-            li.classList.toggle("ok");
-            entry.sections[s.k] = w.innerHTML;
-            save();
-          }
-        });
+        wireWrite(w, s.k);
         return el("section.sec.guided", { "data-anchor": s.k },
           el("div.sec-h", {}, el("span.letter", {}, s.letter), el("div", {}, el("h3", {}, s.title), el("div.hint", {}, s.hint))),
           w);
@@ -261,19 +308,25 @@
       save();
       side && side.refresh();
     }
+    // Favorite verse of the day: a starred verse in the passage, or one looked up in the side panel.
+    // It is kept on its own and never changes the passage or the writing.
     function setKey(k) {
       const [b, c, v] = k.split(":").map(Number);
       entry.key = { b, c, v };
+      entry.fav = null;
       window.getSelection().removeAllRanges();
       hideBars();
       renderScripture();
       app.saveDay(entry).then(() => side && side.refresh());
-      ui.toast("Set as verse of the day — it shows in the widget");
+      ui.toast("★ Favorite verse of the day — it shows in the side panel and widget");
     }
-    function clearKey() {
+    /** fav: { r, t, tr } from a search, or null to clear. */
+    function setFav(fav) {
+      entry.fav = fav ? { r: fav.r, t: fav.t, tr: fav.tr } : null;
       entry.key = null;
       renderScripture();
       app.saveDay(entry).then(() => side && side.refresh());
+      if (fav) ui.toast("★ Favorite verse of the day saved");
     }
 
     // floating bars
@@ -296,38 +349,93 @@
       const s = selectionInScripture();
       hideBars();
       if (!s) return;
-      hlBar = el("div.fmt", { onmousedown: keep },
+      hlBar = el("div.fmt", { onmousedown: keep, onpointerdown: () => { barTouch = Date.now(); } },
         HL_COLORS.map((c) => el("button.hl", { title: "Highlight", style: { background: c }, onclick: () => applyMark(s.parts, c, "hl") })),
         el("span.sep"),
         el("button", { title: "Underline", onclick: () => applyMark(s.parts, HL_COLORS[0], "ul"), html: "<u>U</u>" }),
         el("button", { title: "Remove highlight", onclick: () => applyMark(s.parts, null) }, "⌫"),
         el("span.sep"),
-        el("button", { title: "Make this the verse of the day (widget)", onclick: () => setKey(s.parts[0].k) }, "★ Verse of the day"));
+        el("button", { title: "Make this your favorite verse of the day", onclick: () => setKey(s.parts[0].k) }, "★ Favorite"));
       place(hlBar, s.rect);
     }
     const onSel = ui.debounce(showHlBar, 120);
     scripture.addEventListener("mouseup", onSel);
     scripture.addEventListener("touchend", onSel);
     document.addEventListener("selectionchange", onSelChange);
+    let barTouch = 0;
     function onSelChange() {
       const sel = window.getSelection();
-      if (hlBar && (sel.isCollapsed || !scripture.contains(sel.anchorNode))) hideBars();
+      rememberRange(sel);
+      if (hlBar && (sel.isCollapsed || !scripture.contains(sel.anchorNode))) {
+        // on phones the tap on a bar button clears the selection before the click arrives: wait for it
+        if (Date.now() - barTouch < 600) return;
+        const bar = hlBar;
+        setTimeout(() => {
+          const now = window.getSelection();
+          if (hlBar === bar && Date.now() - barTouch > 600 && (now.isCollapsed || !scripture.contains(now.anchorNode))) hideBars();
+        }, 250);
+      }
       if (sel.rangeCount && scripture.contains(sel.anchorNode) && !sel.isCollapsed && (window.matchMedia("(pointer: coarse)").matches)) onSel();
     }
 
+    // The caret/selection in a writing area, kept so a tap on the tools (or a font menu on a phone,
+    // which takes the focus away) puts it back exactly where it was.
+    let savedRange = null, savedW = null;
+    function rememberRange(sel) {
+      if (!sel.rangeCount) return;
+      const r = sel.getRangeAt(0);
+      const n = r.startContainer;
+      const w = (n.nodeType === 1 ? n : n.parentElement) && (n.nodeType === 1 ? n : n.parentElement).closest(".write");
+      if (w && content.contains(w)) {
+        savedRange = r.cloneRange();
+        savedW = w;
+      }
+    }
+    function restoreRange(w) {
+      if (document.activeElement !== w) w.focus({ preventScroll: true });
+      if (savedRange && savedW === w && w.contains(savedRange.startContainer)) {
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(savedRange);
+      }
+    }
+
     // reflection text tools
+    // The text tools can be dragged anywhere by their grip and folded down to a small button;
+    // both are remembered on this device.
+    const FMT_KEY = "selah.fmt";
+    let fmtPref = {};
+    try { fmtPref = JSON.parse(localStorage.getItem(FMT_KEY)) || {}; } catch {}
+    const saveFmtPref = () => { try { localStorage.setItem(FMT_KEY, JSON.stringify(fmtPref)); } catch {} };
+    let fmtFor = null;
     function showFmt(w) {
+      if (fmtBar && fmtFor === w) return positionFmt(w);
       fmtBar && fmtBar.remove();
+      fmtFor = w;
       const cmd = (c, v) => () => {
+        restoreRange(w);
         document.execCommand("styleWithCSS", false, true);
         document.execCommand(c, false, v);
         w.dispatchEvent(new Event("input"));
       };
-      const font = el("select", { title: "Font", onchange: (e) => { cmd("fontName", e.target.value)(); w.focus(); } },
+      const font = el("select", { title: "Font", onchange: (e) => { cmd("fontName", e.target.value)(); e.target.value = ""; } },
         el("option", { value: "" }, "Font"), FONTS.map(([n, f]) => el("option", { value: f.replace(/"/g, "'") }, n)));
-      const size = el("select", { title: "Size", onchange: (e) => { cmd("fontSize", e.target.value)(); w.focus(); } },
+      const size = el("select", { title: "Size", onchange: (e) => { cmd("fontSize", e.target.value)(); e.target.value = ""; } },
         el("option", { value: "" }, "Size"), [["2", "Small"], ["3", "Normal"], ["4", "Large"], ["5", "Larger"], ["6", "Title"]].map(([v, n]) => el("option", { value: v }, n)));
-      fmtBar = el("div.fmt", { onmousedown: (e) => e.target.tagName !== "SELECT" && keep(e) },
+      const grip = el("button.grip", { title: "Drag to move the tools (double-tap to put them back)", "aria-label": "Move tools", html: '<svg viewBox="0 0 24 24" width="16" height="16"><g fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></g></svg>' });
+      wireGrip(grip, w);
+      const foldBtn = el("button.fold", { title: "Fold the tools away", "aria-label": "Fold the tools away", onclick: () => setFold(true) }, "–");
+      const openBtn = el("button.unfold", { title: "Show the text tools", onclick: () => setFold(false) }, "Aa");
+      function setFold(v) {
+        fmtPref.min = v;
+        saveFmtPref();
+        fmtBar.classList.toggle("min", v);
+        restoreRange(w);
+        positionFmt(w);
+      }
+      fmtBar = el("div.fmt.text-tools", { class: fmtPref.min ? "min" : "", onmousedown: (e) => e.target.tagName !== "SELECT" && keep(e), onpointerdown: (e) => e.pointerType !== "mouse" && e.target.tagName !== "SELECT" && e.preventDefault() },
+        grip, openBtn,
+        el("span.tools", {},
         font, size, el("span.sep"),
         el("button", { title: "Bold", onclick: cmd("bold"), html: "<b>B</b>" }),
         el("button", { title: "Italic", onclick: cmd("italic"), html: "<i>I</i>" }),
@@ -343,12 +451,56 @@
         el("button", { title: "Numbered list", onclick: cmd("insertOrderedList") }, "1≡"),
         el("button", { title: "Checklist", onclick: () => { cmd("insertUnorderedList")(); const li = window.getSelection().anchorNode; const ul = li && (li.nodeType === 1 ? li : li.parentElement).closest("ul"); if (ul) ul.classList.add("checks"); w.dispatchEvent(new Event("input")); } }, "☑"),
         el("button", { title: "Center", onclick: cmd("justifyCenter") }, "≡"),
-        el("button", { title: "Clear formatting", onclick: cmd("removeFormat") }, "Tx"));
+        el("button", { title: "Clear formatting", onclick: cmd("removeFormat") }, "Tx"),
+        el("button", { title: "Add a verse (or type @)", onclick: () => { restoreRange(w); openVersePicker(w, null); } }, "@"),
+        el("span.sep"), foldBtn));
       document.body.append(fmtBar);
       positionFmt(w);
     }
+    function wireGrip(grip, w) {
+      let drag = null, lastTap = 0;
+      grip.addEventListener("pointerdown", (e) => {
+        e.preventDefault(); // keep the caret in the writing area
+        const r = fmtBar.getBoundingClientRect();
+        drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, moved: false };
+        grip.setPointerCapture(e.pointerId);
+      });
+      grip.addEventListener("pointermove", (e) => {
+        if (!drag) return;
+        const x = e.clientX - drag.dx, y = e.clientY - drag.dy;
+        if (!drag.moved && Math.hypot(x - fmtBar.offsetLeft, y - fmtBar.offsetTop) < 3) return;
+        drag.moved = true;
+        fmtPref.x = Math.round(x);
+        fmtPref.y = Math.round(y);
+        placeFixed();
+      });
+      const end = () => {
+        if (!drag) return;
+        if (drag.moved) saveFmtPref();
+        else if (Date.now() - lastTap < 350) {
+          // double-tap: back to following the writing area
+          delete fmtPref.x;
+          delete fmtPref.y;
+          saveFmtPref();
+          positionFmt(w);
+        }
+        lastTap = Date.now();
+        drag = null;
+      };
+      grip.addEventListener("pointerup", end);
+      grip.addEventListener("pointercancel", end);
+      grip.addEventListener("dblclick", () => { delete fmtPref.x; delete fmtPref.y; saveFmtPref(); positionFmt(w); });
+    }
+    function placeFixed() {
+      const bw = fmtBar.offsetWidth, bh = fmtBar.offsetHeight;
+      const vv = window.visualViewport;
+      const vh = vv ? vv.height + vv.offsetTop : window.innerHeight;
+      fmtBar.style.left = Math.max(4, Math.min(window.innerWidth - bw - 4, fmtPref.x)) + "px";
+      fmtBar.style.top = Math.max(4, Math.min(vh - bh - 4, fmtPref.y)) + "px";
+    }
     function positionFmt(w) {
       if (!fmtBar) return;
+      if (fmtPref.x !== undefined && fmtPref.y !== undefined) return placeFixed(); // the person moved it
       const r = w.getBoundingClientRect();
       const bw = fmtBar.offsetWidth, bh = fmtBar.offsetHeight;
       const vr = scroller.getBoundingClientRect();
@@ -359,9 +511,10 @@
     }
     content.addEventListener("focusin", (e) => e.target.classList.contains("write") && showFmt(e.target));
     content.addEventListener("focusout", () => setTimeout(() => {
-      if (fmtBar && !(document.activeElement && document.activeElement.classList.contains("write")) && !fmtBar.contains(document.activeElement)) {
+      if (fmtBar && !(document.activeElement && document.activeElement.classList.contains("write")) && !fmtBar.contains(document.activeElement) && !versePick) {
         fmtBar.remove();
         fmtBar = null;
+        fmtFor = null;
       }
     }, 150));
     scroller.addEventListener("scroll", () => {
@@ -370,7 +523,86 @@
       hideBars();
     });
 
-    // ---------- scaling ----------
+    // ---------- @ verse calls: type @ in any writing area to bring in another verse ----------
+    let versePick = null;
+    function atCheck(w) {
+      const sel = window.getSelection();
+      if (!sel.rangeCount || !sel.isCollapsed) return;
+      const r = sel.getRangeAt(0);
+      const n = r.startContainer, o = r.startOffset;
+      if (n.nodeType !== 3 || o < 1 || n.data[o - 1] !== "@") return;
+      if (o > 1 && !/[\s\u00a0(“"]/.test(n.data[o - 2])) return; // an e-mail address, not a verse call
+      const at = document.createRange();
+      at.setStart(n, o - 1);
+      at.setEnd(n, o);
+      openVersePicker(w, at);
+    }
+    /** at: the range of the typed "@" (replaced by the verse), or null to insert at the caret. */
+    function openVersePicker(w, at) {
+      closeVersePicker();
+      const caret = window.getSelection().rangeCount ? window.getSelection().getRangeAt(0).cloneRange() : null;
+      const input = el("input.input", { placeholder: "Verse, e.g. John 3:16 or Rom 8:28-30", autocomplete: "off", spellcheck: "false", enterkeyhint: "done" });
+      const msg = el("div.muted.small", {}, "Enter to add it · Esc to cancel");
+      const addBtn = el("button.btn.primary", { onclick: () => choose() }, "Add");
+      const box = el("div.verse-pick", {}, input, el("div.row", { style: { alignItems: "center", marginTop: "6px" } }, msg, el("span.spacer"), el("button.btn", { onclick: () => cancel() }, "Cancel"), addBtn));
+      document.body.append(box);
+      const rr = (at || caret || document.createRange()).getBoundingClientRect();
+      const wr = w.getBoundingClientRect();
+      const x = rr.width || rr.height ? rr.left : wr.left + 8, y = rr.width || rr.height ? rr.bottom : wr.top + 32;
+      const bw = box.offsetWidth, bh = box.offsetHeight;
+      box.style.left = Math.max(8, Math.min(window.innerWidth - bw - 8, x - 12)) + "px";
+      box.style.top = (y + bh + 12 > window.innerHeight ? Math.max(8, (rr.top || wr.top) - bh - 8) : y + 6) + "px";
+      versePick = { box, w };
+      let busy = false;
+      async function choose() {
+        if (busy) return;
+        busy = true;
+        msg.className = "muted small";
+        msg.textContent = "Getting the verse…";
+        try {
+          const got = await S.bible.lookup(input.value, { entry });
+          closeVersePicker();
+          w.focus({ preventScroll: true });
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          const target = at || caret;
+          if (target && w.contains(target.startContainer)) sel.addRange(target);
+          else { const end = document.createRange(); end.selectNodeContents(w); end.collapse(false); sel.addRange(end); }
+          if (at) document.execCommand("delete", false); // the typed @
+          const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+          const text = got.verses.length > 1 ? got.verses.map((v) => `<sup>${v.v}</sup> ${esc(v.t)}`).join(" ") : esc(got.text);
+          document.execCommand("insertHTML", false, `<blockquote class="vcall"><b>${esc(got.ref)}</b> <span class="vtr">${esc(S.bible.trInfo(got.tr).name)}</span><br>${text}</blockquote><div><br></div>`);
+          w.dispatchEvent(new Event("input"));
+        } catch (e) {
+          busy = false;
+          msg.className = "err small";
+          msg.textContent = e.message;
+        }
+      }
+      function cancel() {
+        closeVersePicker();
+        restoreRange(w);
+        if (caret && w.contains(caret.startContainer)) { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(caret); }
+      }
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); choose(); }
+        else if (e.key === "Escape") { e.preventDefault(); cancel(); }
+      });
+      box.addEventListener("pointerdown", (e) => e.stopPropagation());
+      setTimeout(() => input.focus(), 0);
+    }
+    function closeVersePicker() {
+      if (!versePick) return;
+      versePick.box.remove();
+      versePick = null;
+      setTimeout(() => {
+        const a = document.activeElement;
+        if (fmtBar && !(a && a.classList && a.classList.contains("write")) && !fmtBar.contains(a)) { fmtBar.remove(); fmtBar = null; fmtFor = null; }
+      }, 150);
+    }
+    const pickOutside = (e) => versePick && !versePick.box.contains(e.target) && closeVersePicker();
+    document.addEventListener("pointerdown", pickOutside, true);
+
     // ---------- scaling & zoom ----------
     // The page is first fitted to the window; zoom then multiplies that (remembered per device).
     let scale = 1, fitScale = 1;
@@ -461,6 +693,7 @@
           if (fmtBar) {
             fmtBar.remove();
             fmtBar = null;
+            fmtFor = null;
           }
         }
       },
@@ -470,8 +703,9 @@
     fit();
 
     side = S.side.mount({
-      date, entry, art,
+      date, id, entry, art,
       go: app.go,
+      setFav,
       setBackground: (id) => { entry.bg = id; applyBg(); save(); },
       scrollToVerse: (k) => {
         const span = scripture.querySelector(`.vt[data-k="${k}"]`);
@@ -483,6 +717,73 @@
     });
     dayEl.append(side.node);
     side.init();
+
+    // ---------- prayer points carry over ----------
+    // Unchecked checklist items (prayer points) from the last earlier entry come forward to today's
+    // first entry; ticking one off (answered) stops it from carrying further.
+    async function carryPrayers() {
+      if (entry.carried || isNotes || date !== ui.today() || app.idsFor(date)[0] !== id) return;
+      entry.carried = true;
+      const earlier = app.sortIds(Object.keys(app.index).filter((k) => app.dateOf(k) < date)).reverse().slice(0, 30);
+      let from = null, open = [];
+      for (const k of earlier) {
+        const p = await app.getDay(k);
+        if (!p || !p.sections) continue;
+        const doc = new DOMParser().parseFromString(`<div>${(p.sections.a || "") + (p.sections.j || "")}</div>`, "text/html");
+        const items = [...doc.querySelectorAll("ul.checks li")];
+        if (!items.length) continue;
+        from = p.date;
+        open = items.filter((li) => !li.classList.contains("ok") && li.textContent.trim()).map((li) => clean(li.innerHTML));
+        break;
+      }
+      const target = entry.guide === false ? "j" : "a";
+      const have = new Set([...new DOMParser().parseFromString(`<div>${entry.sections[target] || ""}</div>`, "text/html").querySelectorAll("li")].map((li) => li.textContent.trim()));
+      open = open.filter((h) => !have.has(new DOMParser().parseFromString(h, "text/html").body.textContent.trim()));
+      if (open.length) {
+        entry.sections[target] = (entry.sections[target] || "") + `<ul class="checks">${open.map((h) => `<li>${h}</li>`).join("")}</ul>`;
+        const w = content.querySelector(`.write[data-k="${target}"]`);
+        if (w) w.innerHTML = clean(entry.sections[target]);
+        art.resize();
+        ui.toast(`Carried ${open.length} prayer point${open.length > 1 ? "s" : ""} from ${ui.shortDate(from)}`);
+      }
+      app.saveDay(entry);
+    }
+    carryPrayers().catch((e) => console.warn("carry", e));
+
+    // ---------- copy the page as text ----------
+    function htmlText(html) {
+      const d = new DOMParser().parseFromString(`<div>${html || ""}</div>`, "text/html").body.firstChild;
+      d.querySelectorAll("ul.checks li").forEach((li) => li.prepend(li.classList.contains("ok") ? "☑ " : "☐ "));
+      d.querySelectorAll("ol").forEach((ol) => [...ol.children].forEach((li, i) => li.prepend(`${i + 1}. `)));
+      d.querySelectorAll("ul:not(.checks) li").forEach((li) => li.prepend("• "));
+      d.querySelectorAll("br").forEach((b) => b.replaceWith("\n"));
+      d.querySelectorAll("div,p,li,blockquote,h1,h2,h3,h4").forEach((b) => b.append("\n"));
+      return d.textContent.replace(/\u00a0/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+    }
+    function pageText() {
+      const out = [`${ui.weekday(date)}, ${ui.longDate(date)}`];
+      if (isNotes) out.push(entry.title || "Notes");
+      if (hasPassage) {
+        const vs = (entry.verses[entry.tr] || []).filter((v) => v.t);
+        out.push("", `${entry.ref} (${S.bible.trInfo(entry.tr).name})`, vs.map((v) => (vs.length > 1 ? `${v.v} ` : "") + v.t).join(" "));
+      }
+      const fav = app.favorite(entry);
+      if (fav) out.push("", `★ ${fav.r} — “${fav.t}”`);
+      if (entry.guide === false || isNotes) {
+        const t = htmlText(entry.sections.j);
+        if (t) out.push("", t);
+      } else {
+        for (const sct of SECTIONS) {
+          const t = htmlText(entry.sections[sct.k]);
+          if (t) out.push("", sct.title.toUpperCase(), t);
+        }
+      }
+      return out.join("\n");
+    }
+    async function copyPage() {
+      save.flush();
+      ui.toast((await ui.copyText(pageText())) ? "Page text copied" : "Couldn't copy on this device");
+    }
 
     // ---------- save as photo ----------
     async function savePhoto() {
@@ -508,7 +809,7 @@
         if (!canvas.width || !canvas.height) throw new Error("this page is too long for one picture");
         // saved as JPEG: small files that open everywhere
         const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
-        const name = `Selah ${date} ${(entry.ref || "Journal").replace(/[:;,]/g, ".").replace(/[\\/]/g, "-")}.jpg`;
+        const name = `Selah ${date} ${(entry.ref || entry.title || (isNotes ? "Notes" : "Journal")).replace(/[:;,]/g, ".").replace(/[\\/]/g, "-")}.jpg`;
         const ok = await S.store.raw("savePhoto", { name, dataUrl });
         if (ok !== false && S.platform !== "android") ui.toast(S.platform === "apple" ? "Choose where to save the photo" : "Photo saved"); // Android shows its own notice
       } catch (e) {
@@ -521,8 +822,13 @@
     }
 
     return {
+      async flush() {
+        await save.flush();
+      },
       async leave() {
         save.flush();
+        closeVersePicker();
+        document.removeEventListener("pointerdown", pickOutside, true);
         art.destroy();
         sheetRO.disconnect();
         document.removeEventListener("keydown", zoomKeys);
