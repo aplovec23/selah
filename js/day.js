@@ -11,9 +11,9 @@
   const SCRIPTURE_HINT = "Let the word be set before you, that it may guide your steps.";
   const SECTIONS = [
     { k: "e", letter: "E", title: "Examine", hint: "Consider the meaning, and ponder the truth revealed. Ask questions about the passage.", ph: "What does this passage say? What truth stands out to you?" },
-    { k: "l", letter: "L", title: "Lesson", hint: "Take hold of the teaching, that wisdom may dwell within you. What verse caught your heart?", ph: "The lesson I'm taking hold of today…" },
+    { k: "l", letter: "L", title: "Lesson", hint: "Take hold of the teaching, that wisdom may dwell within you.", ph: "The lesson I'm taking hold of today…" },
     { k: "a", letter: "A", title: "Acknowledge", hint: "Lift up your prayer in thanksgiving, confession, and praise.", ph: "Lord, I thank you for…  I confess…  I praise you because…  (Use ☑ for prayer points: unchecked ones carry to the next day.)" },
-    { k: "h", letter: "H", title: "Heart", hint: "Plant this truth deep within, and meditate upon it day and night.", ph: "Write, draw, or sit quietly with the words to carry in your heart…" },
+    { k: "h", letter: "H", title: "Heart", hint: "Plant this truth deep within, and meditate upon it day and night. What verse caught your heart?", ph: "Write, draw, or sit quietly with the words to carry in your heart…" },
   ];
   const HL_COLORS = ["#fff176", "#b9f6ca", "#b3e5fc", "#f8bbd0", "#ffd180", "#d1c4e9"];
   const UL_COLORS = { "#fff176": "#c9a400", "#b9f6ca": "#2f9e5a", "#b3e5fc": "#1f7fb5", "#f8bbd0": "#c2477a", "#ffd180": "#d9822b", "#d1c4e9": "#6e55c9" };
