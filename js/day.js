@@ -212,10 +212,16 @@
     sheet.append(content);
     applyGuide();
 
-    function applyBg() {
-      const b = S.backgrounds.byId[entry.bg] || S.backgrounds.byId.cream;
-      sheet.style.background = b.css;
-      sheet.classList.toggle("dark-paper", !!b.dark);
+    // backgrounds: still ones are CSS; moving scenes and the person's own videos/GIFs play in a layer
+    let motionLayer = null;
+    async function applyBg() {
+      const want = entry.bg;
+      const my = String(want || "").startsWith("my:") ? (await S.motion.myList()).find((x) => "my:" + x.id === want) : null;
+      if (want !== entry.bg) return;
+      const b = my ? null : S.backgrounds.byId[want] || S.backgrounds.byId.cream;
+      sheet.style.background = my ? (my.dark ? "#1f2430" : "#fffdf8") : b.css;
+      sheet.classList.toggle("dark-paper", my ? !!my.dark : !!b.dark);
+      if (motionLayer) motionLayer.set(b ? b.id : null, my);
     }
     applyBg();
 
@@ -701,6 +707,8 @@
 
     renderScripture();
     fit();
+    motionLayer = S.motion.attach({ sheet, scroller, scale: () => scale });
+    applyBg();
 
     side = S.side.mount({
       date, id, entry, art,
@@ -796,6 +804,7 @@
       sheet.style.transform = "none";
       sheet.classList.add("capturing");
       try {
+        await motionLayer.capture(true);
         // Fit the picture within what the device can make: iPhone/iPad/Safari allow about 16 million pixels
         // per image and 16,384 px per side; long pages are saved a little smaller instead of failing.
         const w = sheet.offsetWidth, h = sheet.offsetHeight;
@@ -818,6 +827,7 @@
       } finally {
         sheet.style.transform = oldT;
         sheet.classList.remove("capturing");
+        motionLayer.capture(false);
       }
     }
 
@@ -830,6 +840,7 @@
         closeVersePicker();
         document.removeEventListener("pointerdown", pickOutside, true);
         art.destroy();
+        motionLayer && motionLayer.destroy();
         sheetRO.disconnect();
         document.removeEventListener("keydown", zoomKeys);
         window.removeEventListener("pagehide", flushNow);

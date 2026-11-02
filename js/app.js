@@ -6,7 +6,7 @@
   const trName = (id) => S.bible.trInfo(id).name;
 
   // ---------- data ----------
-  const DEFAULTS = { guide: true, tr: "web", bg: "cream", theme: "auto", font: "serif", startWeek: 0, pen: "#2e2a25" };
+  const DEFAULTS = { guide: true, tr: "web", bg: "cream", theme: "auto", font: "serif", startWeek: 0, pen: "#2e2a25", motion: true };
   let settings = { ...DEFAULTS };
   let index = {}; // entry id -> { ref, kind, title, done, vod: { web: {r,t}, ... } }
 
@@ -437,6 +437,7 @@
       const guideSel = el("select.input", {}, [["guide", "S.E.L.A.H. guide (Scripture, Examine, Lesson, Acknowledge, Heart)"], ["free", "Free journal (one open writing area)"]].map(([v, n]) =>
         el("option", { value: v, selected: (settings.guide === false ? "free" : "guide") === v }, n)));
       const theme = el("select.input", {}, [["auto", "Match device"], ["light", "Light"], ["dark", "Dark"]].map(([v, n]) => el("option", { value: v, selected: v === settings.theme }, n)));
+      const motionSel = el("select.input", {}, [["on", "Play"], ["off", "Keep still"]].map(([v, n]) => el("option", { value: v, selected: (settings.motion === false ? "off" : "on") === v }, n)));
       const week = el("select.input", {}, [[0, "Sunday"], [1, "Monday"]].map(([v, n]) => el("option", { value: v, selected: v === settings.startWeek }, n)));
       const extra = [];
       if (S.platform === "electron") {
@@ -456,6 +457,7 @@
         el("label.field", {}, el("span", {}, "Page style for new pages"), guideSel),
         el("label.field", {}, el("span", {}, "Background for new pages"), bgSel),
         el("div.row", {}, el("label.field", {}, el("span", {}, "Appearance"), theme), el("label.field", {}, el("span", {}, "Week starts on"), week)),
+        el("label.field", {}, el("span", {}, "Moving backgrounds"), motionSel),
         ...extra,
         el("h4", { style: { margin: "18px 0 8px" } }, "Bible downloads"),
         S.sources.localIds.length ? el("p.muted", { style: { margin: "0 0 10px" } }, `On this device: ${S.sources.localIds.map((id) => S.bible.trInfo(id).name).join(", ")} from your own Bible files (works offline).`) : null,
@@ -463,12 +465,12 @@
         el("label.field", {}, el("span", {}, "ESV key (optional)"), esvIn),
         el("label.field", {}, el("span", {}, "NLT key (optional)"), nltIn),
         el("h4", { style: { margin: "18px 0 8px" } }, "Move to another device"),
-        el("p.muted", { style: { margin: "0 0 10px" } }, "Export makes one backup file with every planned day, reflection, drawing and photo. Import it on another device."),
+        el("p.muted", { style: { margin: "0 0 10px" } }, "Export makes one backup file with every planned day, reflection, drawing and photo, plus your own backgrounds and music. Import it on another device."),
         el("div.row", {}, el("button.btn", { onclick: exportAll }, "Export backup…"), el("button.btn", { onclick: () => { close(); importAll(); } }, "Import backup…")),
         el("p.copyright", { style: { marginTop: "18px" } }, "WEB and KJV text from bible-api.com (public domain). ESV® © Crossway and NLT © Tyndale House Foundation, used through their official services with the publishers' notices."),
         el("div.actions", {}, el("button.btn.primary", {
           onclick: async () => {
-            await saveSettings({ guide: guideSel.value === "guide", tr: trSel.value, bg: bgSel.value, theme: theme.value, startWeek: +week.value, esvKey: esvIn.value.trim(), nltKey: nltIn.value.trim() });
+            await saveSettings({ guide: guideSel.value === "guide", tr: trSel.value, bg: bgSel.value, theme: theme.value, startWeek: +week.value, motion: motionSel.value === "on", esvKey: esvIn.value.trim(), nltKey: nltIn.value.trim() });
             close();
             route();
           },
@@ -490,7 +492,13 @@
     const mystickers = (await S.store.get("mystickers")) || [];
     const stickers = {};
     for (const st of mystickers) stickers[st.id] = await S.store.get("sticker/" + st.id);
-    const data = { app: "selah", version: 1, exported: new Date().toISOString(), settings, days, photos, mystickers, stickers };
+    const mybgs = (await S.store.get("mybgs")) || [];
+    const bgmedia = {};
+    for (const b of mybgs) bgmedia[b.id] = await S.store.get("bgmedia/" + b.id);
+    const songs = (await S.store.get("songs")) || [];
+    const songData = {};
+    for (const t of songs) songData[t.id] = await S.store.get("song/" + t.id);
+    const data = { app: "selah", version: 1, exported: new Date().toISOString(), settings, days, photos, mystickers, stickers, mybgs, bgmedia, songs, songData };
     const ok = await S.store.saveFile(`Selah backup ${ui.today()}.selah`, JSON.stringify(data));
     if (ok) ui.toast(`Exported ${days.length} day${days.length === 1 ? "" : "s"}`);
   }
@@ -525,6 +533,18 @@
         }
         await S.store.set("mystickers", mine);
       }
+      // own backgrounds and songs: add any this device doesn't have yet
+      for (const [listKey, dataKey, prefix] of [["mybgs", "bgmedia", "bgmedia/"], ["songs", "songData", "song/"]]) {
+        if (!Array.isArray(data[listKey]) || !data[dataKey]) continue;
+        const mine = (await S.store.get(listKey)) || [];
+        const have = new Set(mine.map((x) => x.id));
+        for (const x of data[listKey]) {
+          if (have.has(x.id) || !data[dataKey][x.id]) continue;
+          await S.store.set(prefix + x.id, data[dataKey][x.id]);
+          mine.push(x);
+        }
+        await S.store.set(listKey, mine);
+      }
       let n = 0;
       for (const e of data.days) {
         if (index[e.id] && !replace) continue;
@@ -549,6 +569,7 @@
     document.getElementById("go-today").onclick = () => go("#/day/" + ui.today()); // shows the start choices if nothing is planned
     document.getElementById("go-plan").onclick = () => planDialog(location.hash.startsWith("#/day/") ? location.hash.slice(6) : ui.today());
     document.getElementById("go-settings").onclick = settingsDialog;
+    S.music.init().catch((e) => console.warn("music", e));
     window.addEventListener("hashchange", route);
     // Native shells can open a specific day (e.g. tapping the widget).
     window.SelahOpenDay = (d) => go(idsFor(d).length ? "#/day/" + idsFor(d)[0] : "#/cal/" + d.slice(0, 7));

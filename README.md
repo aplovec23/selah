@@ -8,6 +8,8 @@ A daily devotional journal that runs in the browser. Plan Bible passages on a ca
 - You can also paste a passage yourself from your own Bible app or a website.
 - ESV and NLT can be added in Settings with your own free keys from the publishers (api.esv.org, api.nlt.to).
 - Everything you write stays in your browser on that device. Use Settings → Export backup to move it.
+- Pages can have moving backgrounds (drawn live, no video files) or your own looping video/GIF.
+- A music player (♪) plays your own songs or a Spotify playlist while you journal.
 - Add it to your home screen ("Add to Home Screen" / "Install app") to use it like an app.
 
 No Bible text is stored in this repository.

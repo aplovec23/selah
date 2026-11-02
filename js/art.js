@@ -844,9 +844,39 @@
     }
     function bgPop(anchor) {
       ui.popover(anchor, (p, close) => {
-        for (const g of ["Plain", "Notebook", "Paper"]) {
-          p.append(el("h4", {}, g), el("div.grid-pick", {}, S.backgrounds.LIST.filter((b) => b.group === g).map((b) =>
-            el("button", { class: entry.bg === b.id ? "on" : "", title: b.name, onclick: () => { opts.setBackground(b.id); close(); } }, el("span.bg-swatch", { style: { background: b.css } }), b.name))));
+        p.classList.add("bg-pop");
+        // the person's own looping videos and GIFs
+        const mine = el("div.grid-pick");
+        const upBtn = el("button.add-sticker", { title: `Upload a looping video or GIF (up to ${S.motion.MAX_MB} MB)`, onclick: async () => {
+          close();
+          const info = await S.motion.upload();
+          if (info) opts.setBackground("my:" + info.id);
+        } }, el("span.plus", {}, "+"), "Video or GIF");
+        mine.append(upBtn);
+        S.motion.myList().then((list) => {
+          for (const m of list) {
+            const thumb = el("span.bg-swatch.my-thumb");
+            S.motion.mediaURL(m.id).then((u) => {
+              if (!u) return;
+              thumb.append(m.kind === "video" ? Object.assign(el("video", { src: u, muted: true, playsinline: true, preload: "metadata" }), { muted: true }) : el("img", { src: u, alt: "" }));
+            });
+            const del = el("span.my-del", { title: "Remove from this device", role: "button" }, "×");
+            del.addEventListener("click", async (e) => {
+              e.stopPropagation();
+              close();
+              if (await ui.confirmBox("Remove this background?", `“${m.name}” will be removed from this device. Pages using it go back to plain paper.`, "Remove", true)) {
+                await S.motion.remove(m.id);
+                if (entry.bg === "my:" + m.id) opts.setBackground("cream");
+              }
+            });
+            mine.append(el("button.my-bg", { class: entry.bg === "my:" + m.id ? "on" : "", title: m.name, onclick: () => { opts.setBackground("my:" + m.id); close(); } }, thumb, del, m.name));
+          }
+        });
+        p.append(el("h4", {}, "My videos & GIFs"), mine);
+        for (const g of ["Moving", "Plain", "Notebook", "Paper"]) {
+          p.append(el("h4", {}, g === "Moving" ? "Moving (from Scripture)" : g), el("div.grid-pick", {}, S.backgrounds.LIST.filter((b) => b.group === g).map((b) =>
+            el("button", { class: entry.bg === b.id ? "on" : "", title: b.ref ? `${b.name} · ${b.ref}` : b.name, onclick: () => { opts.setBackground(b.id); close(); } },
+              el("span.bg-swatch", { class: b.scene ? "moving" : "", style: { background: b.css } }), b.name))));
         }
       });
     }
