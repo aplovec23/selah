@@ -565,6 +565,7 @@
     const permOverlay = el("button.btn.primary", { onclick: () => S.store.raw("focusOpenSettings", { which: "overlay" }), hidden: true }, "2. Allow display over other apps");
     async function refresh() {
       const st = (await S.store.raw("focusStatus")) || {};
+      if (st.supported === false) { wrap.hidden = true; return; } // offline edition of the Android app
       sw.set(!!st.enabled);
       permUsage.hidden = !st.enabled || st.usageOn;
       permOverlay.hidden = !st.enabled || st.overlayOn;
@@ -575,13 +576,14 @@
         st.unlockedToday ? `On · ${n} app${n > 1 ? "s" : ""} · unlocked for today (you've read).` :
         `On · ${n} app${n > 1 ? "s" : ""} held back until you tap “Done reading” on today's page.`;
     }
+    const wrap = el("div");
     refresh();
     document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && refresh());
-    return [
+    wrap.append(
       el("h4", { style: { margin: "18px 0 8px" } }, "Focus first"),
       el("p.muted", { style: { margin: "0 0 8px" } }, "Opening a held-back app (e.g. Facebook, TikTok) shows a gentle reminder to read first. They unlock for the rest of the day after you tap “Done reading”."),
-      sw, status, el("div.row", {}, pick, permUsage, permOverlay),
-    ];
+      sw, status, el("div.row", {}, pick, permUsage, permOverlay));
+    return [wrap];
   }
 
   async function pickApps(done) {
