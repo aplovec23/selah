@@ -85,7 +85,7 @@
           el("h2", {}, ui.longDate(date)),
           el("p.muted", {}, extra ? "A new entry for this day. How would you like to start?" : isToday ? "Nothing planned for today yet. How would you like to start?" : "Nothing planned for this day yet."),
           el("div.start-choices", {},
-            choice("📖", "Choose a passage", "Type a reference and download it (needs internet).", () => app.planDialog(date, null, { id }), true),
+            choice("📖", "Choose a passage", "Type a reference — works offline.", () => app.planDialog(date, null, { id }), true),
             choice("📋", "Paste a passage", "Paste from your Bible app or a website — works offline.", () => app.planDialog(date, null, { paste: true, id })),
             choice("✎", "Just journal", "A blank page to write freely, no passage.", async () => { await app.journalDay(id); app.go("#/day/" + id); }),
             choice("📝", "Notes only", "A titled page of notes — sermon, study, ideas. Type @ to add a verse.", async () => { await app.journalDay(id, { notes: true }); app.go("#/day/" + id); })),

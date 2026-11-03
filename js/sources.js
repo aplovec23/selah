@@ -1,7 +1,8 @@
 /* Where passages come from. Selah ships no Bible text: when a day is planned, its passage is
  * fetched from one of these services and saved with that day, so reading is fully offline later.
  *
- * - WEB and KJV: bible-api.com (public domain, no key; about 15 requests per 30 seconds).
+ * - Built in, fully offline (all public domain): WEB, KJV, Tagalog Ang Dating Biblia (1905) and
+ *   Cebuano Ang Biblia (1917), in data/*.json. Nothing is downloaded for these.
  * - ESV: Crossway's official API (free for non-commercial use, needs a key from api.esv.org).
  * - NLT: Tyndale's official API (needs a key from api.nlt.to).
  * - Tagalog: Ang Dating Biblia (1905, public domain) from getBible.net (no key).
@@ -12,8 +13,8 @@
   const S = (window.Selah = window.Selah || {});
 
   const ALL = {
-    web: { id: "web", name: "WEB", full: "World English Bible", notice: "World English Bible (WEB), public domain.", fetchable: true },
-    kjv: { id: "kjv", name: "KJV", full: "King James Version", notice: "King James Version (KJV), public domain.", fetchable: true },
+    web: { id: "web", name: "WEB", full: "World English Bible", notice: "World English Bible (WEB), public domain.", builtIn: true },
+    kjv: { id: "kjv", name: "KJV", full: "King James Version", notice: "King James Version (KJV), public domain.", builtIn: true },
     esv: {
       id: "esv", name: "ESV", full: "English Standard Version", needsKey: "esvKey", keyUrl: "api.esv.org", fetchable: true,
       notice: "Scripture quotations are from the ESV® Bible (The Holy Bible, English Standard Version®), © 2001 by Crossway, a publishing ministry of Good News Publishers. Used by permission. All rights reserved. esv.org",
@@ -23,7 +24,7 @@
       notice: "Holy Bible, New Living Translation, © 1996, 2004, 2015 by Tyndale House Foundation. Used by permission of Tyndale House Publishers. All rights reserved.",
     },
     tag1905: {
-      id: "tag1905", name: "TAG", full: "Ang Dating Biblia (1905) — Tagalog", fetchable: true, service: "getbible", lang: "tl",
+      id: "tag1905", name: "TAG", full: "Ang Dating Biblia (1905) — Tagalog", builtIn: true, lang: "tl",
       notice: "Ang Dating Biblia (1905), Tagalog — public domain. Text from getBible.net.", bookNames: ["Genesis", "Exodo", "Levitico", "Mga Bilang", "Deuteronomio", "Josue", "Mga Hukom", "Ruth", "1 Samuel", "2 Samuel", "1 Mga Hari", "2 Mga Hari", "1 Mga Cronica", "2 Mga Cronica", "Ezra", "Nehemias", "Ester", "Job", "Mga Awit", "Mga Kawikaan", "Mangangaral", "Awit ni Solomon", "Isaias", "Jeremias", "Mga Panaghoy", "Ezekiel", "Daniel", "Oseas", "Joel", "Amos", "Obadias", "Jonas", "Mikas", "Nahum", "Habacuc", "Zefanias", "Hagai", "Zacarias", "Malachias", "Mateo", "Marcos", "Lucas", "Juan", "Mga Gawa", "Mga Romano", "1 Mga Corinto", "2 Mga Corinto", "Mga Taga-Galacia", "Mga Efeso", "Mga Taga-Filipos", "Mga Taga-Colosas", "1 Mga Taga-Tesalonica", "2 Mga Taga-Tesalonica", "1 Timoteo", "2 Timoteo", "Tito", "Filemon", "Mga Hebreo", "Santiago", "1 Pedro", "2 Pedro", "1 Juan", "2 Juan", "3 Juan", "Judas", "Pahayag"],
     },
     ceb1917: {

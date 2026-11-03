@@ -1,8 +1,8 @@
 // Lets the web version open with no internet: the app's own files are kept in a cache.
 // Bible downloads always go to the network (they are saved with each day inside the app).
-const VERSION = "selah-v12";
+const VERSION = "selah-v13";
 const FILES = [
-  "./", "./index.html", "./app.css", "./manifest.webmanifest", "./data/books.json", "./data/ceb1917.json",
+  "./", "./index.html", "./app.css", "./manifest.webmanifest", "./data/books.json", "./data/ceb1917.json", "./data/web.json", "./data/kjv.json", "./data/tag1905.json",
   "./vendor/html2canvas-pro.min.js",
   "./js/store.js", "./js/sources.js", "./js/bible.js", "./js/stickers.js", "./js/backgrounds.js", "./js/ui.js", "./js/motion.js", "./js/music.js",
   "./js/calendar.js", "./js/art.js", "./js/side.js", "./js/day.js", "./js/app.js",

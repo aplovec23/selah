@@ -536,3 +536,6 @@ main#view { flex: 1; min-height: 0; overflow: auto; position: relative; }
 .app-row { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-radius: 8px; cursor: pointer; }
 .app-row:hover { background: var(--surface-2); }
 .app-row img, .app-row .app-ic { width: 28px; height: 28px; border-radius: 7px; background: var(--surface-2); }
+
+.help { margin: 8px 0 0; padding-left: 22px; line-height: 1.7; }
+.install-btn { color: var(--accent); }

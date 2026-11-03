@@ -271,10 +271,10 @@
         pasteArea.hidden = !v;
         prev.hidden = v;
         segField.hidden = v;
-        modeBtn.textContent = v ? "Download it instead" : "Paste it yourself";
+        modeBtn.textContent = v ? "Use Selah's Bibles instead" : "Paste it yourself";
         sub.textContent = v
           ? "Type the reference, then paste the passage from your Bible app or a website (e.g. BibleGateway). No internet needed."
-          : "Pick a day and type the passage. It's downloaded now and saved on this device, so the day opens offline.";
+          : "Pick a day and type the passage. It's saved on this device and works offline.";
         if (v) setTimeout(() => pasteBox.focus(), 30);
       }
       const dateIn = el("input.input", { type: "date", value: date || ui.today() });
@@ -332,8 +332,8 @@
           if (pasteMode) {
             await planDay(id, refIn.value, { pasted: { name: pasteName.value, text: pasteBox.value }, guide: guideSw.get() });
           } else {
-            prev.replaceChildren(el("span.muted", {}, "Downloading the passage for offline reading…"));
-            await planDay(id, refIn.value, { guide: guideSw.get(), onStep: (k, total) => prev.replaceChildren(el("span.muted", {}, `Downloading… ${k} of ${total} translations`)) });
+            prev.replaceChildren(el("span.muted", {}, "Saving the passage…"));
+            await planDay(id, refIn.value, { guide: guideSw.get(), onStep: (k, total) => prev.replaceChildren(el("span.muted", {}, `Saving… ${k} of ${total} translations`)) });
           }
           close();
           ui.toast(`Saved for ${ui.shortDate(d)}`);
@@ -395,7 +395,7 @@
           let error = null;
           for (let c = first, k = 0; c <= n && !stop; c += step, k++) {
             const c2 = Math.min(n, c + step - 1);
-            note.textContent = `Downloading day ${k + 1} of ${totalDays} (${names[b]} ${c}${c2 > c ? "–" + c2 : ""})… Keep Selah open.`;
+            note.textContent = `Planning day ${k + 1} of ${totalDays} (${names[b]} ${c}${c2 > c ? "–" + c2 : ""})… Keep Selah open.`;
             bar.firstChild.style.width = Math.round((k / totalDays) * 100) + "%";
             if (idsFor(d).length) skipped++;
             else {
@@ -417,7 +417,7 @@
       }, "Download & fill calendar");
       box.append(
         el("h2", {}, "Plan many days"),
-        el("p.sub", {}, "Read through a book a few chapters at a time, one day after another. Every day's passage is downloaded now, so the whole plan works offline."),
+        el("p.sub", {}, "Read through a book a few chapters at a time, one day after another. Every day's passage is saved on this device, so the whole plan works offline."),
         el("label.field", {}, el("span", {}, "Book"), book),
         el("div.row", {}, el("label.field", {}, el("span", {}, "From chapter"), from), el("label.field", {}, el("span", {}, "Chapters per day"), per)),
         el("label.field", {}, el("span", {}, "Start date"), start),
@@ -442,6 +442,7 @@
       const week = el("select.input", {}, [[0, "Sunday"], [1, "Monday"]].map(([v, n]) => el("option", { value: v, selected: v === settings.startWeek }, n)));
       const extra = [];
       if (S.platform === "android") extra.push(...focusSettings());
+      if (S.platform === "browser" && "serviceWorker" in navigator) extra.push(...installSettings());
       if (S.platform === "electron") {
         const verseWin = el("input", { type: "checkbox" });
         const login = el("input", { type: "checkbox" });
@@ -461,9 +462,9 @@
         el("div.row", {}, el("label.field", {}, el("span", {}, "Appearance"), theme), el("label.field", {}, el("span", {}, "Week starts on"), week)),
         el("label.field", {}, el("span", {}, "Moving backgrounds"), motionSel),
         ...extra,
-        el("h4", { style: { margin: "18px 0 8px" } }, "Bible downloads"),
+        el("h4", { style: { margin: "18px 0 8px" } }, "Bibles"),
         S.sources.localIds.length ? el("p.muted", { style: { margin: "0 0 10px" } }, `On this device: ${S.sources.localIds.map((id) => S.bible.trInfo(id).name).join(", ")} from your own Bible files (works offline).`) : "",
-        el("p.muted", { style: { margin: "0 0 10px" } }, "Selah doesn't store whole Bibles. Each planned day downloads just its passage. WEB and KJV are free and need nothing. To add ESV or NLT, get a free key for non-commercial use and paste it here: api.esv.org (ESV), api.nlt.to (NLT)."),
+        el("p.muted", { style: { margin: "0 0 10px" } }, "Built in and fully offline: WEB, KJV, Tagalog (Ang Dating Biblia 1905) and Cebuano (Ang Biblia 1917), all public domain. Optional: add ESV or NLT with a free key for non-commercial use (api.esv.org, api.nlt.to); those two download when you plan a day, so they need internet."),
         el("label.field", {}, el("span", {}, "ESV key (optional)"), esvIn),
         el("label.field", {}, el("span", {}, "NLT key (optional)"), nltIn),
         el("h4", { style: { margin: "18px 0 8px" } }, "Move to another device"),
@@ -479,6 +480,80 @@
         }, "Done"))
       );
     });
+  }
+
+  // ---------- web version: install to the home screen, and work offline ----------
+  let installPrompt = null;
+  const standalone = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  /** Are the app and all its built-in Bibles saved for offline use? */
+  async function offlineReady() {
+    if (!("caches" in window)) return false;
+    const need = ["index.html", "js/app.js", "data/books.json", "data/web.json", "data/kjv.json", "data/tag1905.json", "data/ceb1917.json"];
+    const hits = await Promise.all(need.map((f) => caches.match(f, { ignoreSearch: true })));
+    return hits.every(Boolean);
+  }
+
+  function setupInstall() {
+    const btn = el("button.btn.ghost.install-btn", { hidden: true, title: "Install Selah on this device", onclick: () => install() }, "⤓ Install");
+    document.querySelector(".top-actions").prepend(btn);
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      installPrompt = e;
+      if (!standalone()) btn.hidden = false;
+    });
+    window.addEventListener("appinstalled", () => {
+      btn.hidden = true;
+      installPrompt = null;
+      ui.toast("Selah is installed. Open it from your home screen — it works offline.", 5000);
+    });
+    // tell the person once when everything is saved for offline use
+    navigator.serviceWorker.ready.then(async () => {
+      for (let i = 0; i < 20; i++) {
+        if (await offlineReady()) {
+          let told = false;
+          try { told = localStorage.getItem("selah.offlineTold") === "1"; localStorage.setItem("selah.offlineTold", "1"); } catch {}
+          if (!told) ui.toast("✓ Ready to use offline", 4000);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+    });
+  }
+
+  async function install() {
+    if (installPrompt) {
+      installPrompt.prompt();
+      await installPrompt.userChoice.catch(() => {});
+      installPrompt = null;
+      document.querySelector(".install-btn") && (document.querySelector(".install-btn").hidden = true);
+      return;
+    }
+    installHelp();
+  }
+
+  function installHelp() {
+    ui.dialog((box, close) => box.append(
+      el("h2", {}, "Install Selah"),
+      el("p.sub", {}, "Install once while online. After that Selah opens from your home screen and works with no internet, Bibles included."),
+      isIOS()
+        ? el("ol.help", {}, el("li", {}, "Open this page in Safari."), el("li", {}, "Tap the Share button (square with an arrow)."), el("li", {}, "Choose “Add to Home Screen”, then Add."))
+        : el("ol.help", {}, el("li", {}, "Open this page in Chrome."), el("li", {}, "Tap the ⋮ menu (top right)."), el("li", {}, "Choose “Install app” or “Add to Home screen”.")),
+      el("div.actions", {}, el("button.btn.primary", { onclick: close }, "OK"))));
+  }
+
+  function installSettings() {
+    const status = el("p.muted", { style: { margin: "6px 0" } }, "Checking…");
+    offlineReady().then((ok) => {
+      status.textContent = (standalone() ? "Installed on this device. " : "") +
+        (ok ? "✓ Ready to use offline — the app and all built-in Bibles are saved here." : "Saving the app for offline use… keep it open for a minute while online.");
+    });
+    return [
+      el("h4", { style: { margin: "18px 0 8px" } }, "Install & offline"),
+      status,
+      standalone() ? "" : el("div.row", {}, el("button.btn.primary", { onclick: () => install() }, "Install Selah"), el("button.btn", { onclick: installHelp }, "How?")),
+    ];
   }
 
   // ---------- Focus first (Android): hold back chosen apps until today's passage is read ----------
@@ -633,6 +708,7 @@
     // web version only: keep the app's files for offline use and allow "Add to Home Screen"
     if (S.platform === "browser" && "serviceWorker" in navigator && location.protocol === "https:") {
       navigator.serviceWorker.register("sw.js").catch(() => {});
+      setupInstall();
     }
     // Refresh the widget feed just after midnight while the app stays open.
     let day = ui.today();
