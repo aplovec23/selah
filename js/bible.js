@@ -147,12 +147,14 @@
   }
 
   /** Tidy label for ranges, e.g. "John 3:16–21; Psalm 23". */
-  function label(ranges) {
+  /** Tidy label for ranges; with a translation id, book names are in that translation's language. */
+  function label(ranges, trId) {
     const out = [];
     let lastBook = -1;
     for (const r of ranges) {
       const shape = books.shape[r.b];
-      const name = r.b === books.names.indexOf("Psalms") && r.c1 === r.c2 ? "Psalm" : books.names[r.b];
+      const local = trId && S.sources.ALL[trId] && S.sources.ALL[trId].bookNames;
+      const name = local ? local[r.b] : r.b === books.names.indexOf("Psalms") && r.c1 === r.c2 ? "Psalm" : books.names[r.b];
       const whole1 = r.v1 === 1;
       const whole2 = r.v2 === shape[r.c2 - 1];
       let s;

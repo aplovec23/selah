@@ -66,7 +66,8 @@
       let pick = [vs[i]];
       if (!entry.key && vs[i].t.length < 70 && vs[i + 1] && vs[i + 1].t) pick.push(vs[i + 1]); // very short first verse: add the next
       const first = pick[0], last = pick[pick.length - 1];
-      const name = S.bible.bookName(first.b).replace(/^Psalms$/, "Psalm");
+      const local = S.sources.ALL[t.id] && S.sources.ALL[t.id].bookNames;
+      const name = local ? local[first.b] : S.bible.bookName(first.b).replace(/^Psalms$/, "Psalm");
       out[t.id] = {
         r: `${name} ${first.c}:${first.v}${last.v !== first.v ? "–" + last.v : ""}`,
         t: pick.map((v) => v.t).join(" "),

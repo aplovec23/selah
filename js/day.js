@@ -4,7 +4,7 @@
   const { el } = S.ui;
   const ui = S.ui;
   // translations saved with a day, in a steady order (older days may also have NIV/ESV/NLT from before)
-  const ORDER = ["web", "kjv", "esv", "nlt", "niv"];
+  const ORDER = ["niv", "esv", "nlt", "web", "kjv", "tag1905", "ceb1917"];
   const savedTr = (entry) => Object.keys(entry.verses || {}).sort((a, b) => (ORDER.indexOf(a) + 99) % 99 - (ORDER.indexOf(b) + 99) % 99);
 
   // The S.E.L.A.H. devotional flow (S is the passage itself, shown above these).
@@ -148,6 +148,8 @@
 
     // ---------- page content ----------
     const scripture = el("div.scripture");
+    // the passage label in the chosen translation's language (e.g. "Juan 3:16–21" for Tagalog/Cebuano)
+    const refFor = (tr) => (entry.ranges && entry.ranges.length ? S.bible.label(entry.ranges, tr) : entry.ref || "");
     // Free journal style: one open writing area instead of E/L/A/H (both are kept; only one shows)
     function journalSection() {
       const ph = isNotes ? "Your notes… Type @ to add a verse (e.g. @John 3:16)." : hasPassage ? "Write freely — thoughts, prayers, notes, anything on your heart…" : "Write freely…";
@@ -199,7 +201,7 @@
     const content = el("div.sheet-content", {},
       el("header.day-date", { "data-anchor": "top" }, el("span.dow", {}, ui.weekday(date)), el("span.full", {}, ui.longDate(date))),
       el("section.sec.sec-s", { "data-anchor": "s", class: hasPassage ? "" : "empty" },
-        el("div.sec-h", {}, el("span.letter", {}, "S"), el("div", {}, el("h3", {}, "Scripture ", el("span.ref-line", {}, "· " + entry.ref)), el("div.hint", {}, SCRIPTURE_HINT))),
+        el("div.sec-h", {}, el("span.letter", {}, "S"), el("div", {}, el("h3", {}, "Scripture ", el("span.ref-line", {}, "· " + refFor(entry.tr))), el("div.hint", {}, SCRIPTURE_HINT))),
         scripture,
         el("div.copyright", { "data-tr": "" })),
       SECTIONS.map((s) => {
@@ -228,6 +230,8 @@
     // ---------- scripture & highlights ----------
     const keyOf = (v) => `${v.b}:${v.c}:${v.v}`;
     function renderScripture() {
+      const refLine = content.querySelector(".ref-line");
+      if (refLine) refLine.textContent = "· " + refFor(entry.tr);
       const vs = entry.verses[entry.tr] || [];
       const marks = entry.hl[entry.tr] || [];
       const multiChapter = new Set(vs.map((v) => v.b + ":" + v.c)).size > 1;
@@ -235,7 +239,7 @@
       let lastCh = null;
       for (const v of vs) {
         const chKey = v.b + ":" + v.c;
-        if (multiChapter && chKey !== lastCh) scripture.append(el("span.chap", {}, `${S.bible.bookName(v.b).replace(/^Psalms$/, "Psalm")} ${v.c}`));
+        if (multiChapter && chKey !== lastCh) scripture.append(el("span.chap", {}, `${S.sources.ALL[entry.tr] && S.sources.ALL[entry.tr].bookNames ? S.sources.bookName(entry.tr, v.b) : S.bible.bookName(v.b).replace(/^Psalms$/, "Psalm")} ${v.c}`));
         lastCh = chKey;
         if (!v.t && entry.pasted && entry.pasted[entry.tr]) continue; // pasted as one block: nothing to show here
         scripture.append(el("sup", {}, v.v));

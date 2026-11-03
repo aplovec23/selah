@@ -4,6 +4,8 @@
  * - WEB and KJV: bible-api.com (public domain, no key; about 15 requests per 30 seconds).
  * - ESV: Crossway's official API (free for non-commercial use, needs a key from api.esv.org).
  * - NLT: Tyndale's official API (needs a key from api.nlt.to).
+ * - Tagalog: Ang Dating Biblia (1905, public domain) from getBible.net (no key).
+ * - Cebuano: Ang Biblia, Bugna version (1917, public domain) — built into the app (data/ceb1917.json), works offline.
  * NIV/old ESV/NLT entries only describe days planned before this change (their text is already saved).
  */
 (function () {
@@ -19,6 +21,14 @@
     nlt: {
       id: "nlt", name: "NLT", full: "New Living Translation", needsKey: "nltKey", keyUrl: "api.nlt.to", fetchable: true,
       notice: "Holy Bible, New Living Translation, © 1996, 2004, 2015 by Tyndale House Foundation. Used by permission of Tyndale House Publishers. All rights reserved.",
+    },
+    tag1905: {
+      id: "tag1905", name: "TAG", full: "Ang Dating Biblia (1905) — Tagalog", fetchable: true, service: "getbible", lang: "tl",
+      notice: "Ang Dating Biblia (1905), Tagalog — public domain. Text from getBible.net.", bookNames: ["Genesis", "Exodo", "Levitico", "Mga Bilang", "Deuteronomio", "Josue", "Mga Hukom", "Ruth", "1 Samuel", "2 Samuel", "1 Mga Hari", "2 Mga Hari", "1 Mga Cronica", "2 Mga Cronica", "Ezra", "Nehemias", "Ester", "Job", "Mga Awit", "Mga Kawikaan", "Mangangaral", "Awit ni Solomon", "Isaias", "Jeremias", "Mga Panaghoy", "Ezekiel", "Daniel", "Oseas", "Joel", "Amos", "Obadias", "Jonas", "Mikas", "Nahum", "Habacuc", "Zefanias", "Hagai", "Zacarias", "Malachias", "Mateo", "Marcos", "Lucas", "Juan", "Mga Gawa", "Mga Romano", "1 Mga Corinto", "2 Mga Corinto", "Mga Taga-Galacia", "Mga Efeso", "Mga Taga-Filipos", "Mga Taga-Colosas", "1 Mga Taga-Tesalonica", "2 Mga Taga-Tesalonica", "1 Timoteo", "2 Timoteo", "Tito", "Filemon", "Mga Hebreo", "Santiago", "1 Pedro", "2 Pedro", "1 Juan", "2 Juan", "3 Juan", "Judas", "Pahayag"],
+    },
+    ceb1917: {
+      id: "ceb1917", name: "CEB", full: "Ang Biblia, Bugna (1917) — Cebuano", builtIn: true, lang: "ceb",
+      notice: "Ang Biblia, Bugna version (1917), Cebuano — public domain. Text from the Christian Classics Ethereal Library.", bookNames: ["Genesis", "Exodo", "Levitico", "Numeros", "Deuteronomio", "Josue", "Mga Maghuhukom", "Ruth", "I Samuel", "II Samuel", "I Mga Hari", "II Mga Hari", "I Mga Cronicas", "II Mga Cronicas", "Esdras", "Nehemias", "Ester", "Job", "Mga Salmo", "Mga Proverbio", "Ecclesiastes", "Awit Ni Salomon", "Isaias", "Jeremias", "Lamentaciones", "Ezequiel", "Daniel", "Oseas", "Joel", "Amos", "Abdias", "Jonas", "Miqueas", "Nahum", "Habacuc", "Sofonias", "Haggeo", "Zacarias", "Malaquias", "Mateo", "Marcos", "Lucas", "Juan", "Mga Buhat", "Mga Taga-Roma", "I Mga Taga-Corinto", "II Mga Taga-Corinto", "Mga Taga-Galacia", "Mga Taga-Efeso", "Mga Taga-Filipos", "Mga Taga-Colosas", "I Mga Taga-Tesalonica", "II Mga Taga-Tesalonica", "I Kang Timoteo", "II Kang Timoteo", "Kang Tito", "Kang Filemon", "Sa Mga Hebreohanon", "Jacobo", "I Pedro", "II Pedro", "I Juan", "II Juan", "III Juan", "Judas", "Ang Bugna"],
     },
     niv: { id: "niv", name: "NIV", full: "New International Version", notice: "NIV® © Biblica, Inc.", fetchable: false },
   };
@@ -41,11 +51,25 @@
     return localText[id];
   }
 
-  /** Translations usable now: personal files first (offline), then downloads (ESV/NLT only with a key). */
+  // ---------- built-in public-domain text (shipped with every edition) ----------
+  const builtInText = {};
+  async function builtInBook(id) {
+    if (!builtInText[id]) builtInText[id] = (await (await fetch(`data/${id}.json`)).json()).books;
+    return builtInText[id];
+  }
+
+  /** Translations usable now: personal files and built-in ones first (offline), then downloads (ESV/NLT only with a key). */
   function available(settings) {
     const local = localIds.map((id) => Object.assign({}, info(id), { local: true }));
+    const builtIn = Object.values(ALL).filter((t) => t.builtIn && !localIds.includes(t.id)).map((t) => Object.assign({}, t, { local: true }));
     const online = Object.values(ALL).filter((t) => t.fetchable && !localIds.includes(t.id) && (!t.needsKey || (settings && settings[t.needsKey])));
-    return local.concat(online);
+    return local.concat(builtIn, online);
+  }
+
+  /** Book name in a translation's own language (Tagalog/Cebuano), else English. */
+  function bookName(id, b) {
+    const t = ALL[id];
+    return (t && t.bookNames && t.bookNames[b]) || S.bible.bookName(b);
   }
 
   // ---------- network (through the native shell when there is one, so no browser limits apply) ----------
@@ -60,7 +84,7 @@
   }
 
   // keep under each service's rate limit
-  const gaps = { "bible-api": 2100, esv: 250, nlt: 250 };
+  const gaps = { "bible-api": 2100, esv: 250, nlt: 250, getbible: 300 };
   const last = {};
   async function paced(service, fn) {
     const wait = (last[service] || 0) + gaps[service] - Date.now();
@@ -100,6 +124,16 @@
     return got;
   }
 
+  // getBible.net: one chapter per request, by book number (Genesis = 1)
+  async function fetchGetBible(p, t) {
+    const code = { tag1905: "tagalog" }[t.id];
+    const r = await paced("getbible", () => http(`https://api.getbible.net/v2/${code}/${p.b + 1}/${p.c}.json`));
+    if (r.status !== 200) throw new Error(String(r.status));
+    const got = {};
+    for (const v of JSON.parse(r.text).verses || []) if (v.chapter === p.c && v.verse >= p.v1 && v.verse <= p.v2) got[v.verse] = clean(v.text);
+    return got;
+  }
+
   async function fetchEsv(p, t, key) {
     const ref = `${S.bible.bookName(p.b)} ${p.c}:${p.v1}-${p.v2}`;
     const q = new URLSearchParams({
@@ -134,9 +168,9 @@
   /** Verses of the ranges in one translation, fetched now: [{b,c,v,t}] ("" if the service has none). */
   async function fetchVerses(ranges, id, settings, onPiece) {
     const t = info(id);
-    if (localIds.includes(id)) {
-      // from the personal files on this device: no internet needed
-      const data = await localBook(id);
+    if (localIds.includes(id) || t.builtIn) {
+      // from files on this device (personal or built-in): no internet needed
+      const data = localIds.includes(id) ? await localBook(id) : await builtInBook(id);
       const shape = S.bible.books().shape;
       return pieces(ranges, shape).flatMap((p) => {
         const ch = data[p.b][p.c - 1] || [];
@@ -152,6 +186,7 @@
       for (const p of pieces(ranges, shape)) {
         const got = id === "esv" ? await fetchEsv(p, t, settings.esvKey)
           : id === "nlt" ? await fetchNlt(p, t, settings.nltKey)
+          : t.service === "getbible" ? await fetchGetBible(p, t)
           : await fetchBibleApi(p, t);
         for (let v = p.v1; v <= p.v2; v++) out.push({ b: p.b, c: p.c, v, t: got[v] || "" });
         onPiece && onPiece();
@@ -163,5 +198,5 @@
     return out;
   }
 
-  S.sources = { ALL, info, init, available, fetchVerses, http, get localIds() { return localIds; } };
+  S.sources = { ALL, info, init, available, fetchVerses, http, bookName, get localIds() { return localIds; } };
 })();
