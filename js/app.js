@@ -486,14 +486,16 @@
     const status = el("p.muted", { style: { margin: "6px 0" } }, "…");
     const sw = ui.toggle("Hold back my chosen apps until I've read today", false, async (on) => { await S.store.raw("focusSet", { enabled: on }); refresh(); });
     const pick = el("button.btn", { onclick: () => pickApps(refresh) }, "Choose apps…");
-    const perm = el("button.btn.primary", { onclick: () => S.store.raw("focusOpenSettings"), hidden: true }, "Allow in Accessibility settings");
+    const permUsage = el("button.btn.primary", { onclick: () => S.store.raw("focusOpenSettings", { which: "usage" }), hidden: true }, "1. Allow usage access");
+    const permOverlay = el("button.btn.primary", { onclick: () => S.store.raw("focusOpenSettings", { which: "overlay" }), hidden: true }, "2. Allow display over other apps");
     async function refresh() {
       const st = (await S.store.raw("focusStatus")) || {};
       sw.set(!!st.enabled);
-      perm.hidden = !st.enabled || st.serviceOn;
+      permUsage.hidden = !st.enabled || st.usageOn;
+      permOverlay.hidden = !st.enabled || st.overlayOn;
       const n = (st.apps || []).length;
       status.textContent = !st.enabled ? "Off." :
-        !st.serviceOn ? "One more step: allow Selah in Accessibility settings so it can notice when a held-back app opens." :
+        !st.usageOn || !st.overlayOn ? "Almost there: Android needs two permissions. Tap each button below, find Selah, and switch it on. (Usage access only shows Selah which app is open; nothing is recorded.)" :
         !n ? "On, but no apps chosen yet." :
         st.unlockedToday ? `On · ${n} app${n > 1 ? "s" : ""} · unlocked for today (you've read).` :
         `On · ${n} app${n > 1 ? "s" : ""} held back until you tap “Done reading” on today's page.`;
@@ -503,7 +505,7 @@
     return [
       el("h4", { style: { margin: "18px 0 8px" } }, "Focus first"),
       el("p.muted", { style: { margin: "0 0 8px" } }, "Opening a held-back app (e.g. Facebook, TikTok) shows a gentle reminder to read first. They unlock for the rest of the day after you tap “Done reading”."),
-      sw, status, el("div.row", {}, pick, perm),
+      sw, status, el("div.row", {}, pick, permUsage, permOverlay),
     ];
   }
 
