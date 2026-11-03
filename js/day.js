@@ -12,7 +12,7 @@
   const SECTIONS = [
     { k: "e", letter: "E", title: "Examine", hint: "Consider the meaning, and ponder the truth revealed. Ask questions about the passage.", ph: "What does this passage say? What truth stands out to you?" },
     { k: "l", letter: "L", title: "Lesson", hint: "Take hold of the teaching, that wisdom may dwell within you.", ph: "The lesson I'm taking hold of today…" },
-    { k: "a", letter: "A", title: "Acknowledge", hint: "Lift up your prayer in thanksgiving, confession, and praise.", ph: "Lord, I thank you for…  I confess…  I praise you because…  (Use ☑ for prayer points: unchecked ones carry to the next day.)" },
+    { k: "a", letter: "A", title: "Acknowledge", hint: "Lift up your prayer in thanksgiving, confession, and praise.", ph: "Lord, I thank you for…  I confess…  I praise you because…" },
     { k: "h", letter: "H", title: "Heart", hint: "Plant this truth deep within, and meditate upon it day and night. What verse caught your heart?", ph: "Write, draw, or sit quietly with the words to carry in your heart…" },
   ];
   // The guide lines in the language of the Bible being read (TAG → Tagalog, CEB → Cebuano, otherwise English).
@@ -22,7 +22,7 @@
       s: "Ilagay ang salita sa iyong harapan, upang ito'y gumabay sa iyong mga hakbang.",
       e: ["Pagnilayan ang kahulugan, at bulay-bulayin ang katotohanang inihayag. Magtanong tungkol sa talata.", "Ano ang sinasabi ng talatang ito? Anong katotohanan ang tumatak sa iyo?"],
       l: ["Panghawakan ang aral, upang ang karunungan ay manahan sa iyo.", "Ang aral na aking pinanghahawakan ngayon…"],
-      a: ["Itaas ang iyong panalangin ng pasasalamat, pagtatapat, at papuri.", "Panginoon, salamat po sa…  Ipinagtatapat ko…  Pinupuri Kita dahil…  (Gamitin ang ☑ sa mga ipinapanalangin: ang hindi pa natsek ay madadala sa susunod na araw.)"],
+      a: ["Itaas ang iyong panalangin ng pasasalamat, pagtatapat, at papuri.", "Panginoon, salamat po sa…  Ipinagtatapat ko…  Pinupuri Kita dahil…"],
       h: ["Itanim ang katotohanang ito sa kaibuturan ng iyong puso, at bulay-bulayin ito araw at gabi. Anong talata ang tumimo sa iyong puso?", "Isulat, iguhit, o manahimik kasama ang mga salitang dadalhin mo sa iyong puso…"],
       j: "Malayang sumulat — mga isipin, panalangin, tala, anumang nasa iyong puso…",
     },
@@ -30,7 +30,7 @@
       s: "Ibutang ang pulong sa imong atubangan, aron kini mogiya sa imong mga lakang.",
       e: ["Palandunga ang kahulogan, ug pamalandungi ang kamatuoran nga gipadayag. Pangutana bahin sa teksto.", "Unsa ang giingon niini nga teksto? Unsang kamatuoran ang nakadani kanimo?"],
       l: ["Kupti ang pagtulon-an, aron ang kaalam mopuyo diha kanimo.", "Ang pagtulon-an nga akong gikuptan karong adlawa…"],
-      a: ["Ipataas ang imong pag-ampo sa pagpasalamat, pagsugid, ug pagdayeg.", "Ginoo, salamat sa…  Akong isugid…  Gidayeg ko Ikaw kay…  (Gamita ang ☑ sa mga ampoonon: ang wala pa ma-tsek madala sa sunod nga adlaw.)"],
+      a: ["Ipataas ang imong pag-ampo sa pagpasalamat, pagsugid, ug pagdayeg.", "Ginoo, salamat sa…  Akong isugid…  Gidayeg ko Ikaw kay…"],
       h: ["Itanom kini nga kamatuoran sa kahiladman sa imong kasingkasing, ug pamalandungi kini adlaw ug gabii. Unsang bersikulo ang mitandog sa imong kasingkasing?", "Isulat, idrowing, o paghilom uban sa mga pulong nga imong dad-on sa imong kasingkasing…"],
       j: "Gawasnong pagsulat — mga hunahuna, pag-ampo, nota, bisan unsa nga anaa sa imong kasingkasing…",
     },
