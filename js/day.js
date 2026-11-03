@@ -15,6 +15,33 @@
     { k: "a", letter: "A", title: "Acknowledge", hint: "Lift up your prayer in thanksgiving, confession, and praise.", ph: "Lord, I thank you for…  I confess…  I praise you because…  (Use ☑ for prayer points: unchecked ones carry to the next day.)" },
     { k: "h", letter: "H", title: "Heart", hint: "Plant this truth deep within, and meditate upon it day and night. What verse caught your heart?", ph: "Write, draw, or sit quietly with the words to carry in your heart…" },
   ];
+  // The guide lines in the language of the Bible being read (TAG → Tagalog, CEB → Cebuano, otherwise English).
+  // Headings stay in English because they spell S.E.L.A.H.
+  const GUIDE = {
+    tl: {
+      s: "Ilagay ang salita sa iyong harapan, upang ito'y gumabay sa iyong mga hakbang.",
+      e: ["Pagnilayan ang kahulugan, at bulay-bulayin ang katotohanang inihayag. Magtanong tungkol sa talata.", "Ano ang sinasabi ng talatang ito? Anong katotohanan ang tumatak sa iyo?"],
+      l: ["Panghawakan ang aral, upang ang karunungan ay manahan sa iyo.", "Ang aral na aking pinanghahawakan ngayon…"],
+      a: ["Itaas ang iyong panalangin ng pasasalamat, pagtatapat, at papuri.", "Panginoon, salamat po sa…  Ipinagtatapat ko…  Pinupuri Kita dahil…  (Gamitin ang ☑ sa mga ipinapanalangin: ang hindi pa natsek ay madadala sa susunod na araw.)"],
+      h: ["Itanim ang katotohanang ito sa kaibuturan ng iyong puso, at bulay-bulayin ito araw at gabi. Anong talata ang tumimo sa iyong puso?", "Isulat, iguhit, o manahimik kasama ang mga salitang dadalhin mo sa iyong puso…"],
+      j: "Malayang sumulat — mga isipin, panalangin, tala, anumang nasa iyong puso…",
+    },
+    ceb: {
+      s: "Ibutang ang pulong sa imong atubangan, aron kini mogiya sa imong mga lakang.",
+      e: ["Palandunga ang kahulogan, ug pamalandungi ang kamatuoran nga gipadayag. Pangutana bahin sa teksto.", "Unsa ang giingon niini nga teksto? Unsang kamatuoran ang nakadani kanimo?"],
+      l: ["Kupti ang pagtulon-an, aron ang kaalam mopuyo diha kanimo.", "Ang pagtulon-an nga akong gikuptan karong adlawa…"],
+      a: ["Ipataas ang imong pag-ampo sa pagpasalamat, pagsugid, ug pagdayeg.", "Ginoo, salamat sa…  Akong isugid…  Gidayeg ko Ikaw kay…  (Gamita ang ☑ sa mga ampoonon: ang wala pa ma-tsek madala sa sunod nga adlaw.)"],
+      h: ["Itanom kini nga kamatuoran sa kahiladman sa imong kasingkasing, ug pamalandungi kini adlaw ug gabii. Unsang bersikulo ang mitandog sa imong kasingkasing?", "Isulat, idrowing, o paghilom uban sa mga pulong nga imong dad-on sa imong kasingkasing…"],
+      j: "Gawasnong pagsulat — mga hunahuna, pag-ampo, nota, bisan unsa nga anaa sa imong kasingkasing…",
+    },
+  };
+  GUIDE.en = {
+    s: SCRIPTURE_HINT,
+    j: "Write freely — thoughts, prayers, notes, anything on your heart…",
+  };
+  for (const sec of SECTIONS) GUIDE.en[sec.k] = [sec.hint, sec.ph];
+  const guideLang = (tr) => (window.Selah.sources && window.Selah.sources.ALL[tr] && window.Selah.sources.ALL[tr].lang) || "en";
+
   const HL_COLORS = ["#fff176", "#b9f6ca", "#b3e5fc", "#f8bbd0", "#ffd180", "#d1c4e9"];
   const UL_COLORS = { "#fff176": "#c9a400", "#b9f6ca": "#2f9e5a", "#b3e5fc": "#1f7fb5", "#f8bbd0": "#c2477a", "#ffd180": "#d9822b", "#d1c4e9": "#6e55c9" };
   const FONTS = [
@@ -201,14 +228,14 @@
     const content = el("div.sheet-content", {},
       el("header.day-date", { "data-anchor": "top" }, el("span.dow", {}, ui.weekday(date)), el("span.full", {}, ui.longDate(date))),
       el("section.sec.sec-s", { "data-anchor": "s", class: hasPassage ? "" : "empty" },
-        el("div.sec-h", {}, el("span.letter", {}, "S"), el("div", {}, el("h3", {}, "Scripture ", el("span.ref-line", {}, "· " + refFor(entry.tr))), el("div.hint", {}, SCRIPTURE_HINT))),
+        el("div.sec-h", {}, el("span.letter", {}, "S"), el("div", {}, el("h3", {}, "Scripture ", el("span.ref-line", {}, "· " + refFor(entry.tr))), el("div.hint", { "data-g": "s" }, SCRIPTURE_HINT))),
         scripture,
         el("div.copyright", { "data-tr": "" })),
       SECTIONS.map((s) => {
         const w = el("div.write", { contenteditable: "true", "data-ph": s.ph, "data-k": s.k, spellcheck: "true", html: clean(entry.sections[s.k]) });
         wireWrite(w, s.k);
         return el("section.sec.guided", { "data-anchor": s.k },
-          el("div.sec-h", {}, el("span.letter", {}, s.letter), el("div", {}, el("h3", {}, s.title), el("div.hint", {}, s.hint))),
+          el("div.sec-h", {}, el("span.letter", {}, s.letter), el("div", {}, el("h3", {}, s.title), el("div.hint", { "data-g": s.k }, s.hint))),
           w);
       }).concat(journalSection()));
     sheet.append(content);
@@ -229,7 +256,22 @@
 
     // ---------- scripture & highlights ----------
     const keyOf = (v) => `${v.b}:${v.c}:${v.v}`;
+    /** Guide lines and writing hints follow the language of the Bible shown. */
+    function applyGuideLang() {
+      const g = GUIDE[guideLang(entry.tr)] || GUIDE.en;
+      content.querySelectorAll(".hint[data-g]").forEach((n) => {
+        const k = n.dataset.g;
+        n.textContent = k === "s" ? g.s : g[k] ? g[k][0] : n.textContent;
+      });
+      for (const k of ["e", "l", "a", "h"]) {
+        const w = content.querySelector(`.write[data-k="${k}"]`);
+        if (w && g[k]) w.dataset.ph = g[k][1];
+      }
+      const jw = content.querySelector(".journal-write");
+      if (jw && hasPassage && !isNotes) jw.dataset.ph = g.j;
+    }
     function renderScripture() {
+      applyGuideLang();
       const refLine = content.querySelector(".ref-line");
       if (refLine) refLine.textContent = "· " + refFor(entry.tr);
       const vs = entry.verses[entry.tr] || [];
