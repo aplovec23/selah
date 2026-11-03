@@ -164,7 +164,25 @@
       el("button.icon-btn.side-toggle", { title: "Companion panel: today, prayer list, memory verse", "aria-label": "Companion panel", onclick: () => side && side.toggle(), html: '<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14.5 4.5v15" stroke="currentColor" stroke-width="1.8"/></svg>' }));
     let side = null;
     // saving the page as a picture lives at the very bottom, out of the way while writing
+    // "Done reading": marks today's devotional as read (and unlocks apps held back by Focus first on Android)
+    const isToday = entry.date === ui.today();
+    const readToday = () => !!entry.readAt && ui.iso(new Date(entry.readAt)) === ui.today();
+    const doneBtn = isToday ? el("button.btn.done-read", { onclick: () => markRead() }) : null;
+    function showDone() {
+      if (!doneBtn) return;
+      doneBtn.classList.toggle("on", readToday());
+      doneBtn.textContent = readToday() ? "✓ Read today" : hasPassage ? "Done reading" : "Done with my quiet time";
+    }
+    async function markRead() {
+      if (readToday()) return;
+      entry.readAt = Date.now();
+      showDone();
+      await app.saveDay(entry);
+      const r = await S.store.raw("focusUnlock", { date: ui.today() });
+      ui.toast(r && r.unlocked ? "Well done 🙏 Your apps are unlocked for today." : "Marked as read 🙏");
+    }
     const bottom = el("div.day-bottom", {},
+      !hasPassage && doneBtn ? doneBtn : null,
       el("button.btn.download", { onclick: () => copyPage(), title: "Copy this page's text",
         html: '<svg viewBox="0 0 24 24" width="18" height="18"><rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" fill="none" stroke="currentColor" stroke-width="2"/></svg> Copy' }),
       el("button.btn.download", { onclick: () => savePhoto(), title: "Save this whole page as a picture",
@@ -230,7 +248,8 @@
       el("section.sec.sec-s", { "data-anchor": "s", class: hasPassage ? "" : "empty" },
         el("div.sec-h", {}, el("span.letter", {}, "S"), el("div", {}, el("h3", {}, "Scripture ", el("span.ref-line", {}, "· " + refFor(entry.tr))), el("div.hint", { "data-g": "s" }, SCRIPTURE_HINT))),
         scripture,
-        el("div.copyright", { "data-tr": "" })),
+        el("div.copyright", { "data-tr": "" }),
+        hasPassage && doneBtn ? el("div.done-row", {}, doneBtn) : null),
       SECTIONS.map((s) => {
         const w = el("div.write", { contenteditable: "true", "data-ph": s.ph, "data-k": s.k, spellcheck: "true", html: clean(entry.sections[s.k]) });
         wireWrite(w, s.k);
@@ -239,6 +258,7 @@
           w);
       }).concat(journalSection()));
     sheet.append(content);
+    showDone();
     applyGuide();
 
     // backgrounds: still ones are CSS; moving scenes and the person's own videos/GIFs play in a layer

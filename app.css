@@ -525,3 +525,14 @@ main#view { flex: 1; min-height: 0; overflow: auto; position: relative; }
   body:has(.day) .music, body:has(.day) .music-pill { bottom: calc(72px + var(--safe-b)); }
 }
 @media (prefers-reduced-motion: reduce) { .music { transition: none; } }
+
+/* Done reading */
+.done-row { height: 64px; display: flex; align-items: center; }
+.done-read { font-weight: 700; border-color: var(--accent); color: var(--accent); background: transparent; }
+.done-read.on { background: var(--accent); color: var(--accent-ink); }
+.sheet.capturing .done-row { visibility: hidden; }
+/* Focus first app picker */
+.app-list { max-height: 50vh; overflow: auto; margin-top: 10px; display: grid; gap: 2px; }
+.app-row { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-radius: 8px; cursor: pointer; }
+.app-row:hover { background: var(--surface-2); }
+.app-row img, .app-row .app-ic { width: 28px; height: 28px; border-radius: 7px; background: var(--surface-2); }

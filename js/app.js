@@ -79,7 +79,7 @@
   function summary(entry) {
     const s = entry.sections || {};
     const wrote = Object.values(s).some((h) => (h || "").replace(/<[^>]+>/g, "").trim()) || (entry.strokes || []).length > 0;
-    return { ref: entry.ref, kind: entry.kind || null, title: entry.title || "", done: wrote, vod: verseOfDay(entry) };
+    return { ref: entry.ref, kind: entry.kind || null, title: entry.title || "", done: wrote, vod: verseOfDay(entry), readOn: entry.readAt ? ui.iso(new Date(entry.readAt)) : null };
   }
 
   async function loadIndex() {
@@ -441,6 +441,7 @@
       const motionSel = el("select.input", {}, [["on", "Play"], ["off", "Keep still"]].map(([v, n]) => el("option", { value: v, selected: (settings.motion === false ? "off" : "on") === v }, n)));
       const week = el("select.input", {}, [[0, "Sunday"], [1, "Monday"]].map(([v, n]) => el("option", { value: v, selected: v === settings.startWeek }, n)));
       const extra = [];
+      if (S.platform === "android") extra.push(...focusSettings());
       if (S.platform === "electron") {
         const verseWin = el("input", { type: "checkbox" });
         const login = el("input", { type: "checkbox" });
@@ -461,7 +462,7 @@
         el("label.field", {}, el("span", {}, "Moving backgrounds"), motionSel),
         ...extra,
         el("h4", { style: { margin: "18px 0 8px" } }, "Bible downloads"),
-        S.sources.localIds.length ? el("p.muted", { style: { margin: "0 0 10px" } }, `On this device: ${S.sources.localIds.map((id) => S.bible.trInfo(id).name).join(", ")} from your own Bible files (works offline).`) : null,
+        S.sources.localIds.length ? el("p.muted", { style: { margin: "0 0 10px" } }, `On this device: ${S.sources.localIds.map((id) => S.bible.trInfo(id).name).join(", ")} from your own Bible files (works offline).`) : "",
         el("p.muted", { style: { margin: "0 0 10px" } }, "Selah doesn't store whole Bibles. Each planned day downloads just its passage. WEB and KJV are free and need nothing. To add ESV or NLT, get a free key for non-commercial use and paste it here: api.esv.org (ESV), api.nlt.to (NLT)."),
         el("label.field", {}, el("span", {}, "ESV key (optional)"), esvIn),
         el("label.field", {}, el("span", {}, "NLT key (optional)"), nltIn),
@@ -477,6 +478,55 @@
           },
         }, "Done"))
       );
+    });
+  }
+
+  // ---------- Focus first (Android): hold back chosen apps until today's passage is read ----------
+  function focusSettings() {
+    const status = el("p.muted", { style: { margin: "6px 0" } }, "…");
+    const sw = ui.toggle("Hold back my chosen apps until I've read today", false, async (on) => { await S.store.raw("focusSet", { enabled: on }); refresh(); });
+    const pick = el("button.btn", { onclick: () => pickApps(refresh) }, "Choose apps…");
+    const perm = el("button.btn.primary", { onclick: () => S.store.raw("focusOpenSettings"), hidden: true }, "Allow in Accessibility settings");
+    async function refresh() {
+      const st = (await S.store.raw("focusStatus")) || {};
+      sw.set(!!st.enabled);
+      perm.hidden = !st.enabled || st.serviceOn;
+      const n = (st.apps || []).length;
+      status.textContent = !st.enabled ? "Off." :
+        !st.serviceOn ? "One more step: allow Selah in Accessibility settings so it can notice when a held-back app opens." :
+        !n ? "On, but no apps chosen yet." :
+        st.unlockedToday ? `On · ${n} app${n > 1 ? "s" : ""} · unlocked for today (you've read).` :
+        `On · ${n} app${n > 1 ? "s" : ""} held back until you tap “Done reading” on today's page.`;
+    }
+    refresh();
+    document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && refresh());
+    return [
+      el("h4", { style: { margin: "18px 0 8px" } }, "Focus first"),
+      el("p.muted", { style: { margin: "0 0 8px" } }, "Opening a held-back app (e.g. Facebook, TikTok) shows a gentle reminder to read first. They unlock for the rest of the day after you tap “Done reading”."),
+      sw, status, el("div.row", {}, pick, perm),
+    ];
+  }
+
+  async function pickApps(done) {
+    const [apps, st] = await Promise.all([S.store.raw("focusApps"), S.store.raw("focusStatus")]);
+    const chosen = new Set((st && st.apps) || []);
+    ui.dialog((box, close) => {
+      const search = el("input.input", { placeholder: "Search apps", autocomplete: "off" });
+      const list = el("div.app-list");
+      const draw = () => {
+        const q = search.value.trim().toLowerCase();
+        list.replaceChildren(...(apps || []).filter((a) => !q || a.label.toLowerCase().includes(q)).map((a) => {
+          const cb = el("input", { type: "checkbox" });
+          cb.checked = chosen.has(a.pkg);
+          cb.onchange = () => (cb.checked ? chosen.add(a.pkg) : chosen.delete(a.pkg));
+          return el("label.app-row", {}, cb, a.icon ? el("img", { src: a.icon, alt: "" }) : el("span.app-ic"), el("span", {}, a.label));
+        }));
+      };
+      search.addEventListener("input", draw);
+      draw();
+      box.append(el("h2", {}, "Apps to hold back"), el("p.sub", {}, "Pick the apps to keep closed until you've read today's passage."), search, list,
+        el("div.actions", {}, el("button.btn", { onclick: close }, "Cancel"),
+          el("button.btn.primary", { onclick: async () => { await S.store.raw("focusSet", { apps: [...chosen] }); close(); done && done(); } }, "Save")));
     });
   }
 
@@ -573,6 +623,7 @@
     S.music.init().catch((e) => console.warn("music", e));
     window.addEventListener("hashchange", route);
     // Native shells can open a specific day (e.g. tapping the widget).
+    if (S.platform === "android" && Object.keys(index).some((k) => k.slice(0, 10) === ui.today() && index[k].readOn === ui.today())) S.store.raw("focusUnlock", { date: ui.today() });
     window.SelahOpenDay = (d) => go(idsFor(d).length ? "#/day/" + idsFor(d)[0] : "#/cal/" + d.slice(0, 7));
     if (!location.hash) location.hash = idsFor(ui.today()).length ? "#/day/" + idsFor(ui.today())[0] : "#/cal";
     else route();
