@@ -634,16 +634,25 @@
   }
 
   function importAll() {
-    const inp = el("input", { type: "file", accept: ".selah,.json,application/json" });
+    // no "accept" filter: iPhone/iPad (and some Android pickers) grey out .selah files they don't
+    // recognize, so any file can be picked and its contents are checked below instead
+    const inp = el("input", { type: "file" });
     inp.onchange = async () => {
       const f = inp.files[0];
-      if (!f) return;
+      if (f) importText(await f.text());
+    };
+    inp.click();
+  }
+
+  /** Import a backup's text: from the file picker, or handed over by the app (AirDrop / "Open in Selah"). */
+  async function importText(text) {
+    {
       let data;
       try {
-        data = JSON.parse(await f.text());
+        data = JSON.parse(String(text || "").replace(/^\uFEFF/, ""));
         if (data.app !== "selah" || !Array.isArray(data.days)) throw 0;
       } catch {
-        return ui.toast("That isn't a Selah backup file");
+        return ui.toast("That file isn't a Selah backup. Pick the file made by Settings → Export backup (its name starts with “Selah backup”).", 6000);
       }
       for (const e of data.days) e.id = e.id || e.date;
       const clash = data.days.filter((d) => index[d.id]).length;
@@ -685,8 +694,7 @@
       pushWidget();
       ui.toast(`Imported ${n} day${n === 1 ? "" : "s"}`);
       route();
-    };
-    inp.click();
+    }
   }
 
   // ---------- start ----------
@@ -703,6 +711,7 @@
     window.addEventListener("hashchange", route);
     // Native shells can open a specific day (e.g. tapping the widget).
     if (S.platform === "android" && Object.keys(index).some((k) => k.slice(0, 10) === ui.today() && index[k].readOn === ui.today())) S.store.raw("focusUnlock", { date: ui.today() });
+    window.SelahImportText = (text) => importText(text);
     window.SelahOpenDay = (d) => go(idsFor(d).length ? "#/day/" + idsFor(d)[0] : "#/cal/" + d.slice(0, 7));
     if (!location.hash) location.hash = idsFor(ui.today()).length ? "#/day/" + idsFor(ui.today())[0] : "#/cal";
     else route();
