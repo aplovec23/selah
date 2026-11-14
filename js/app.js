@@ -6,7 +6,7 @@
   const trName = (id) => S.bible.trInfo(id).name;
 
   // ---------- data ----------
-  const DEFAULTS = { guide: true, tr: "web", bg: "cream", theme: "auto", font: "serif", startWeek: 0, pen: "#2e2a25", motion: true };
+  const DEFAULTS = { guide: true, tr: "web", bg: "cream", theme: "auto", font: "serif", startWeek: 0, pen: "#2e2a25", motion: true, textSize: 100, pinch: "text" };
   let settings = { ...DEFAULTS };
   let index = {}; // entry id -> { ref, kind, title, done, vod: { web: {r,t}, ... } }
 
@@ -39,6 +39,14 @@
   function applyTheme() {
     if (settings.theme === "auto") document.documentElement.removeAttribute("data-theme");
     else document.documentElement.setAttribute("data-theme", settings.theme);
+    applyTextSize(settings.textSize);
+  }
+  /** Reading/writing text size on the page, in percent (pinch can change it live). */
+  const TS_MIN = 70, TS_MAX = 250;
+  function applyTextSize(pct) {
+    const v = Math.min(TS_MAX, Math.max(TS_MIN, +pct || 100));
+    document.documentElement.style.setProperty("--ts", String(v / 100));
+    return v;
   }
 
   /** The person's favorite verse of the day: one looked up and starred, or a starred verse in the passage. */
@@ -440,6 +448,11 @@
       const theme = el("select.input", {}, [["auto", "Match device"], ["light", "Light"], ["dark", "Dark"]].map(([v, n]) => el("option", { value: v, selected: v === settings.theme }, n)));
       const motionSel = el("select.input", {}, [["on", "Play"], ["off", "Keep still"]].map(([v, n]) => el("option", { value: v, selected: (settings.motion === false ? "off" : "on") === v }, n)));
       const week = el("select.input", {}, [[0, "Sunday"], [1, "Monday"]].map(([v, n]) => el("option", { value: v, selected: v === settings.startWeek }, n)));
+      const sizeVal = el("b", {}, (settings.textSize || 100) + "%");
+      const sizeIn = el("input", { type: "range", min: 70, max: 250, step: 5, value: settings.textSize || 100,
+        oninput: (e) => { sizeVal.textContent = e.target.value + "%"; applyTextSize(e.target.value); } });
+      const pinchSel = el("select.input", {}, [["text", "Fit text to screen (reading)"], ["page", "Zoom whole page (drawing)"]].map(([v, n]) =>
+        el("option", { value: v, selected: (settings.pinch === "page" ? "page" : "text") === v }, n)));
       const extra = [];
       if (S.platform === "android") extra.push(...focusSettings());
       if (S.platform === "browser" && "serviceWorker" in navigator) extra.push(...installSettings());
@@ -461,6 +474,10 @@
         el("label.field", {}, el("span", {}, "Background for new pages"), bgSel),
         el("div.row", {}, el("label.field", {}, el("span", {}, "Appearance"), theme), el("label.field", {}, el("span", {}, "Week starts on"), week)),
         el("label.field", {}, el("span", {}, "Moving backgrounds"), motionSel),
+        el("h4", { style: { margin: "18px 0 8px" } }, "Reading"),
+        el("div.field", {}, el("span", {}, "Text size"), el("label.slider", {}, "A", sizeIn, sizeVal)),
+        el("label.field", {}, el("span", {}, "Pinch to zoom"), pinchSel),
+        el("p.muted", { style: { margin: "0 0 10px" } }, "Fit to screen: pinch changes the text size and the words wrap to the screen, so there's no scrolling left and right. Drawings and stickers stay where they are, so they may no longer line up with the words. Choose “Zoom whole page” if you draw on the scripture."),
         ...extra,
         el("h4", { style: { margin: "18px 0 8px" } }, "Bibles"),
         S.sources.localIds.length ? el("p.muted", { style: { margin: "0 0 10px" } }, `On this device: ${S.sources.localIds.map((id) => S.bible.trInfo(id).name).join(", ")} from your own Bible files (works offline).`) : "",
@@ -473,13 +490,13 @@
         el("p.copyright", { style: { marginTop: "18px" } }, "WEB and KJV text from bible-api.com (public domain). ESV® © Crossway and NLT © Tyndale House Foundation, used through their official services with the publishers' notices."),
         el("div.actions", {}, el("button.btn.primary", {
           onclick: async () => {
-            await saveSettings({ guide: guideSel.value === "guide", tr: trSel.value, bg: bgSel.value, theme: theme.value, startWeek: +week.value, motion: motionSel.value === "on", esvKey: esvIn.value.trim(), nltKey: nltIn.value.trim() });
+            await saveSettings({ guide: guideSel.value === "guide", tr: trSel.value, bg: bgSel.value, theme: theme.value, startWeek: +week.value, motion: motionSel.value === "on", textSize: +sizeIn.value, pinch: pinchSel.value, esvKey: esvIn.value.trim(), nltKey: nltIn.value.trim() });
             close();
             route();
           },
         }, "Done"))
       );
-    });
+    }, () => applyTextSize(settings.textSize)); // closed without Done: undo the size preview
   }
 
   // ---------- web version: install to the home screen, and work offline ----------
@@ -734,6 +751,7 @@
 
   S.app = {
     get settings() { return settings; },
+    applyTextSize,
     get index() { return index; },
     saveSettings, getDay, saveDay, removeDay, planDay, journalDay, planDialog, bulkDialog, go, route, verseOfDay, favorite, pushWidget,
     dateOf, idsFor, sortIds, nextId, labelOf, flushPage,

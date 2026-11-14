@@ -676,16 +676,22 @@
     document.addEventListener("pointerdown", pickOutside, true);
 
     // ---------- scaling & zoom ----------
-    // The page is first fitted to the window; zoom then multiplies that (remembered per device).
+    // The page is first fitted to the window. Then, depending on Settings → Pinch to zoom:
+    //  "text" (default): pinch / ± change the text size; the page stays fitted, so words wrap to the screen.
+    //  "page": pinch / ± zoom the whole page like a picture (best when drawing on the scripture).
     let scale = 1, fitScale = 1;
-    const ZMIN = 0.5, ZMAX = 3;
+    const textMode = app.settings.pinch !== "page";
+    const ZMIN = 0.5, ZMAX = 3, TMIN = 70, TMAX = 250;
     let zoom = 1;
-    try { zoom = Math.min(ZMAX, Math.max(ZMIN, +localStorage.getItem("selah.zoom") || 1)); } catch {}
-    const zoomLabel = el("button", { title: "Back to fit (100%)", onclick: () => setZoom(1) }, "100%");
-    const zoomCtl = el("div.seg.zoom", { title: "Zoom" },
-      el("button", { title: "Zoom out", "aria-label": "Zoom out", onclick: () => setZoom(zoom / 1.2) }, "−"),
+    if (!textMode) try { zoom = Math.min(ZMAX, Math.max(ZMIN, +localStorage.getItem("selah.zoom") || 1)); } catch {}
+    let textPct = app.applyTextSize(app.settings.textSize);
+    const saveText = ui.debounce(() => app.saveSettings({ textSize: textPct }), 600);
+    const level = () => (textMode ? textPct / 100 : zoom);
+    const zoomLabel = el("button", { title: textMode ? "Text size — tap for normal (100%)" : "Back to fit (100%)", onclick: () => setZoom(1) }, "100%");
+    const zoomCtl = el("div.seg.zoom", { title: textMode ? "Text size" : "Zoom" },
+      el("button", { title: textMode ? "Smaller text" : "Zoom out", "aria-label": textMode ? "Smaller text" : "Zoom out", onclick: () => setZoom(level() / 1.15) }, textMode ? "A−" : "−"),
       zoomLabel,
-      el("button", { title: "Zoom in", "aria-label": "Zoom in", onclick: () => setZoom(zoom * 1.2) }, "+"));
+      el("button", { title: textMode ? "Bigger text" : "Zoom in", "aria-label": textMode ? "Bigger text" : "Zoom in", onclick: () => setZoom(level() * 1.15) }, textMode ? "A+" : "+"));
     top.insertBefore(zoomCtl, trSeg);
 
     function fit() {
@@ -695,21 +701,28 @@
       sheet.style.transform = `scale(${scale})`;
       holder.style.width = entry.width * scale + "px";
       holder.style.height = sheet.offsetHeight * scale + "px";
-      zoomLabel.textContent = Math.round(zoom * 100) + "%";
+      zoomLabel.textContent = Math.round(level() * 100) + "%";
     }
-    /** Change zoom, keeping the point under (cx, cy) — or the middle of the view — in place. */
+    /** Change zoom (or text size), keeping the point under (cx, cy) — or the middle of the view — in place. */
     function setZoom(z, cx, cy) {
-      z = Math.min(ZMAX, Math.max(ZMIN, Math.abs(z - 1) < 0.04 ? 1 : z));
-      if (z === zoom) return;
+      const lo = textMode ? TMIN / 100 : ZMIN, hi = textMode ? TMAX / 100 : ZMAX;
+      z = Math.min(hi, Math.max(lo, Math.abs(z - 1) < 0.04 ? 1 : z));
+      if (textMode) z = Math.round(z * 20) / 20; // 5% steps
+      if (z === level()) return;
       const r = scroller.getBoundingClientRect();
       const px = (cx ?? r.left + r.width / 2) - r.left, py = (cy ?? r.top + r.height / 2) - r.top;
       const hr = holder.getBoundingClientRect();
       const fx = (px + r.left - hr.left) / hr.width, fy = (py + r.top - hr.top) / hr.height;
-      zoom = z;
-      try { localStorage.setItem("selah.zoom", String(z)); } catch {}
+      if (textMode) {
+        textPct = app.applyTextSize(Math.round(z * 100));
+        saveText();
+      } else {
+        zoom = z;
+        try { localStorage.setItem("selah.zoom", String(z)); } catch {}
+      }
       fit();
       const nr = holder.getBoundingClientRect();
-      scroller.scrollLeft += nr.left + fx * nr.width - (px + r.left);
+      if (!textMode) scroller.scrollLeft += nr.left + fx * nr.width - (px + r.left);
       scroller.scrollTop += nr.top + fy * nr.height - (py + r.top);
       hideBars();
     }
@@ -721,15 +734,15 @@
     scroller.addEventListener("wheel", (e) => {
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
-      setZoom(zoom * Math.exp(-e.deltaY / 200), e.clientX, e.clientY);
+      setZoom(level() * Math.exp(-e.deltaY / 200), e.clientX, e.clientY);
     }, { passive: false });
     let gestureStart = 1;
-    scroller.addEventListener("gesturestart", (e) => { e.preventDefault(); gestureStart = zoom; });
+    scroller.addEventListener("gesturestart", (e) => { e.preventDefault(); gestureStart = level(); });
     scroller.addEventListener("gesturechange", (e) => { e.preventDefault(); setZoom(gestureStart * e.scale, e.clientX, e.clientY); });
     let pinch = null;
     const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
     scroller.addEventListener("touchstart", (e) => {
-      if (e.touches.length === 2) pinch = { d: dist(e.touches), z: zoom };
+      if (e.touches.length === 2) pinch = { d: dist(e.touches), z: level() };
     }, { passive: true });
     scroller.addEventListener("touchmove", (e) => {
       if (!pinch || e.touches.length !== 2) return;
@@ -740,8 +753,8 @@
     scroller.addEventListener("touchend", (e) => { if (e.touches.length < 2) pinch = null; });
     const zoomKeys = (e) => {
       if (!(e.ctrlKey || e.metaKey)) return;
-      if (e.key === "=" || e.key === "+") { e.preventDefault(); setZoom(zoom * 1.2); }
-      else if (e.key === "-") { e.preventDefault(); setZoom(zoom / 1.2); }
+      if (e.key === "=" || e.key === "+") { e.preventDefault(); setZoom(level() * 1.15); }
+      else if (e.key === "-") { e.preventDefault(); setZoom(level() / 1.15); }
       else if (e.key === "0") { e.preventDefault(); setZoom(1); }
     };
     document.addEventListener("keydown", zoomKeys);
@@ -909,6 +922,7 @@
         motionLayer && motionLayer.destroy();
         sheetRO.disconnect();
         document.removeEventListener("keydown", zoomKeys);
+        saveText.flush();
         window.removeEventListener("pagehide", flushNow);
         document.removeEventListener("visibilitychange", onHidden);
         side && side.destroy();

@@ -51,7 +51,7 @@
   }
 
   // ---------- modal dialog ----------
-  function dialog(build) {
+  function dialog(build, onClose) {
     const overlay = el("div.overlay");
     const box = el("div.dialog", { role: "dialog", "aria-modal": "true" });
     overlay.append(box);
@@ -61,6 +61,7 @@
       closed = true;
       overlay.remove();
       document.removeEventListener("keydown", onKey);
+      if (onClose) onClose();
     };
     const onKey = (e) => e.key === "Escape" && close();
     overlay.addEventListener("mousedown", (e) => e.target === overlay && close());
